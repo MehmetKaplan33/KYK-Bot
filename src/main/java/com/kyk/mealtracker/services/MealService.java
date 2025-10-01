@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -55,5 +56,13 @@ public class MealService {
                             mealRepository.save(meal);
                         }
                 );
+    }
+
+    public List<Meal> getMealsByDate(LocalDate date) {
+        return mealRepository.findByDate(date);
+    }
+
+    public List<Meal> getMealsByDateAndType(LocalDate date, Integer mealType) {
+        return mealRepository.findByDateAndMealType(date, mealType);
     }
 }
