@@ -3,6 +3,7 @@ package com.kyk.mealtracker.bot;
 import com.kyk.mealtracker.entity.BotUser;
 import com.kyk.mealtracker.entity.Meal;
 import com.kyk.mealtracker.repository.BotUserRepository;
+import com.kyk.mealtracker.services.AdminService;
 import com.kyk.mealtracker.services.MealService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,7 @@ public class KykMealBot extends TelegramLongPollingBot {
     private static final Logger logger = LoggerFactory.getLogger(KykMealBot.class);
     private final MealService mealService;
     private final BotUserRepository botUserRepository;
+    private final AdminService adminService;
 
     @Value("${telegram.bot.username}")
     private String botUsername;
@@ -33,9 +35,10 @@ public class KykMealBot extends TelegramLongPollingBot {
     @Value("${telegram.bot.token}")
     private String botToken;
 
-    public KykMealBot(MealService mealService, BotUserRepository botUserRepository) {
+    public KykMealBot(MealService mealService, BotUserRepository botUserRepository, AdminService adminService) {
         this.mealService = mealService;
         this.botUserRepository = botUserRepository;
+        this.adminService = adminService;
     }
 
     @Override
@@ -62,6 +65,16 @@ public class KykMealBot extends TelegramLongPollingBot {
             // Her mesajda kullanıcıyı kaydet/güncelle
             saveOrUpdateUser(chatId, user);
 
+            // Admin komutları kontrolü
+            if (messageText.startsWith("/admin_")) {
+                if (!adminService.isAdmin(chatId)) {
+                    sendMessage(chatId, "⛔ Bu komutu kullanma yetkiniz yok!");
+                    return;
+                }
+                handleAdminCommand(chatId, messageText);
+                return;
+            }
+
             switch (messageText) {
                 case "/start":
                     sendWelcomeMessage(chatId);
@@ -81,6 +94,13 @@ public class KykMealBot extends TelegramLongPollingBot {
                 case "/yardim":
                     sendHelpMessage(chatId);
                     break;
+                case "/stats":
+                    if (adminService.isAdmin(chatId)) {
+                        sendMessage(chatId, adminService.getBotStats());
+                    } else {
+                        sendMessage(chatId, "⛔ Bu komutu kullanma yetkiniz yok!");
+                    }
+                    break;
                 default:
                     sendMessage(chatId, "Anlaşılamadı. Komutları görmek için /yardim yazın.");
             }
@@ -94,6 +114,45 @@ public class KykMealBot extends TelegramLongPollingBot {
         }
     }
 
+    private void handleAdminCommand(Long chatId, String command) throws TelegramApiException {
+        String[] parts = command.split(" ", 2);
+        String cmd = parts[0];
+
+        switch (cmd) {
+            case "/admin_list":
+                sendMessage(chatId, adminService.getUserList(0));
+                break;
+            case "/admin_broadcast":
+                if (parts.length < 2) {
+                    sendMessage(chatId, "Lütfen gönderilecek mesajı yazın.\nÖrnek: /admin_broadcast Merhaba!");
+                    return;
+                }
+                broadcastMessage(parts[1]);
+                sendMessage(chatId, "✅ Mesaj tüm kullanıcılara gönderildi!");
+                break;
+            case "/admin_stats":
+                sendMessage(chatId, adminService.getBotStats());
+                break;
+            default:
+                sendMessage(chatId, "Geçersiz admin komutu!");
+        }
+    }
+
+    private void broadcastMessage(String message) {
+        List<BotUser> allUsers = botUserRepository.findAll();
+        for (BotUser user : allUsers) {
+            try {
+                SendMessage sendMessage = new SendMessage();
+                sendMessage.setChatId(user.getChatId());
+                sendMessage.setText("📢 Yönetici Duyurusu:\n\n" + message);
+                execute(sendMessage);
+                Thread.sleep(50); // Rate limiting için küçük bir gecikme
+            } catch (Exception e) {
+                logger.error("Broadcast message failed for user: " + user.getChatId(), e);
+            }
+        }
+    }
+
     private void saveOrUpdateUser(Long chatId, User user) {
         BotUser botUser = botUserRepository.findById(chatId).orElse(new BotUser());
         botUser.setChatId(chatId);
@@ -101,9 +160,14 @@ public class KykMealBot extends TelegramLongPollingBot {
         botUser.setFirstName(user.getFirstName());
         botUser.setLastName(user.getLastName());
         botUser.setLastInteractionDate(LocalDateTime.now());
+        botUser.setLastActivityDate(LocalDateTime.now());
+
+        // Yeni kullanıcı ise varsayılan değerleri ayarla
         if (!botUserRepository.existsById(chatId)) {
-            botUser.setNotificationsEnabled(true); // Varsayılan olarak bildirimleri aç
+            botUser.setNotificationsEnabled(true);
+            botUser.setIsAdmin(false);  // Varsayılan olarak admin değil
         }
+
         botUserRepository.save(botUser);
     }
 
@@ -191,10 +255,17 @@ public class KykMealBot extends TelegramLongPollingBot {
                 
                 /bugun - Bugünün menüsünü göster
                 /yarin - Yarının menüsünü göster
+                /bildirim_ac - Günlük bildirimleri aç
+                /bildirim_kapat - Günlük bildirimleri kapat
                 /yardim - Bu mesajı göster
+                """ + (adminService.isAdmin(chatId) ? """
                 
-                ℹ️ Her gün otomatik olarak menü bildirimi alacaksınız.
-                """;
+                🔧 Admin Komutları:
+                /stats - Bot istatistiklerini göster
+                /admin_list - Kullanıcıları listele
+                /admin_broadcast - Tüm kullanıcılara mesaj gönder
+                /admin_stats - Detaylı istatistikler
+                """ : "");
         sendMessage(chatId, helpMessage);
     }
 

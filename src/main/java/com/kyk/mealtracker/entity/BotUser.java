@@ -28,4 +28,10 @@ public class BotUser {
 
     @Column(name = "last_name")
     private String lastName;
+
+    @Column(name = "is_admin", nullable = false)
+    private Boolean isAdmin = false; // Varsayılan değer false
+
+    @Column(name = "last_activity_date")
+    private LocalDateTime lastActivityDate;
 }
