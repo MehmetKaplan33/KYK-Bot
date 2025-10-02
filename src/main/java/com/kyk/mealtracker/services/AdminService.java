@@ -52,14 +52,17 @@ public class AdminService {
         StringBuilder message = new StringBuilder("👥 Kullanıcı Listesi:\n\n");
 
         users.getContent().forEach(user -> {
-            message.append(String.format("%s %s (@%s) - Bildirim: %s\n",
+            String adminBadge = (user.getIsAdmin() != null && user.getIsAdmin()) ? "🔧 " : "";
+            message.append(String.format("%s%s %s (@%s)\n📱 Chat ID: %d\n🔔 Bildirim: %s\n\n",
+                    adminBadge,
                     user.getFirstName(),
                     user.getLastName() != null ? user.getLastName() : "",
                     user.getUsername() != null ? user.getUsername() : "isimsiz",
+                    user.getChatId(),
                     user.isNotificationsEnabled() ? "Açık ✅" : "Kapalı ❌"));
         });
 
-        message.append(String.format("\nSayfa %d/%d", page + 1, users.getTotalPages()));
+        message.append(String.format("Sayfa %d/%d", page + 1, users.getTotalPages()));
         return message.toString();
     }
 

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -75,35 +76,7 @@ public class KykMealBot extends TelegramLongPollingBot {
                 return;
             }
 
-            switch (messageText) {
-                case "/start":
-                    sendWelcomeMessage(chatId);
-                    break;
-                case "/bugun":
-                    sendTodaysMeals(chatId);
-                    break;
-                case "/yarin":
-                    sendTomorrowsMeals(chatId);
-                    break;
-                case "/bildirim_ac":
-                    enableNotifications(chatId);
-                    break;
-                case "/bildirim_kapat":
-                    disableNotifications(chatId);
-                    break;
-                case "/yardim":
-                    sendHelpMessage(chatId);
-                    break;
-                case "/stats":
-                    if (adminService.isAdmin(chatId)) {
-                        sendMessage(chatId, adminService.getBotStats());
-                    } else {
-                        sendMessage(chatId, "🚫 Bu komutu kullanma yetkiniz bulunmuyor.");
-                    }
-                    break;
-                default:
-                    sendMessage(chatId, "❓ Komut anlaşılamadı. Yardım için /yardim yazabilirsiniz.");
-            }
+            handleCommand(update.getMessage());
         } catch (Exception e) {
             logger.error("Message handling error for chatId: " + chatId, e);
             try {
@@ -114,13 +87,49 @@ public class KykMealBot extends TelegramLongPollingBot {
         }
     }
 
+    private void handleCommand(Message message) throws TelegramApiException {
+        String command = message.getText();
+        Long chatId = message.getChatId();
+
+        switch (command.split("\\s+")[0]) {
+            case "/start":
+                sendWelcomeMessage(chatId);
+                break;
+            case "/yardim":
+                sendHelpMessage(chatId);
+                break;
+            case "/bugun":
+                sendTodaysMeals(chatId);
+                break;
+            case "/yarin":
+                sendTomorrowsMeals(chatId);
+                break;
+            case "/bildirim_ac":
+                enableNotifications(chatId);
+                break;
+            case "/bildirim_kapat":
+                disableNotifications(chatId);
+                break;
+            default:
+                sendMessage(chatId, "❓ Komut anlaşılamadı. Yardım için /yardim yazabilirsiniz.");
+        }
+    }
+
     private void handleAdminCommand(Long chatId, String command) throws TelegramApiException {
         String[] parts = command.split(" ", 2);
         String cmd = parts[0];
 
         switch (cmd) {
             case "/admin_list":
-                sendMessage(chatId, adminService.getUserList(0));
+                int page = 0;
+                if (parts.length > 1) {
+                    try {
+                        page = Integer.parseInt(parts[1]);
+                    } catch (NumberFormatException e) {
+                        page = 0;
+                    }
+                }
+                sendMessage(chatId, adminService.getUserList(page));
                 break;
             case "/admin_broadcast":
                 if (parts.length < 2) {
@@ -132,6 +141,20 @@ public class KykMealBot extends TelegramLongPollingBot {
                 break;
             case "/admin_stats":
                 sendMessage(chatId, adminService.getBotStats());
+                break;
+            case "/admin_add":
+                if (parts.length < 2) {
+                    sendMessage(chatId, "⚠️ Kullanım: /admin_add [chatId]\n\nÖrnek:\n/admin_add 123456789");
+                    return;
+                }
+                addAdmin(chatId, parts[1]);
+                break;
+            case "/admin_remove":
+                if (parts.length < 2) {
+                    sendMessage(chatId, "⚠️ Kullanım: /admin_remove [chatId]\n\nÖrnek:\n/admin_remove 123456789");
+                    return;
+                }
+                removeAdmin(chatId, parts[1]);
                 break;
             default:
                 sendMessage(chatId, "❌ Geçersiz komut. /yardim ile komutları görüntüleyin.");
@@ -274,9 +297,10 @@ public class KykMealBot extends TelegramLongPollingBot {
                 """ + (adminService.isAdmin(chatId) ? """
                 
                 🔧 Yönetici Komutları:
-                /stats - Genel istatistikler
-                /admin_list - Kullanıcı listesi
-                /admin_broadcast - Toplu mesaj gönder
+                /admin_list [sayfa] - Kullanıcı listesi (Chat ID'ler ile)
+                /admin_add [chatId] - Admin yetkisi ver
+                /admin_remove [chatId] - Admin yetkisini al
+                /admin_broadcast [mesaj] - Toplu mesaj gönder
                 /admin_stats - Detaylı analiz
                 """ : "");
         sendMessage(chatId, helpMessage);
@@ -288,5 +312,64 @@ public class KykMealBot extends TelegramLongPollingBot {
         message.setText(text);
         message.enableHtml(true);
         execute(message);
+    }
+
+    private void addAdmin(Long requestorChatId, String targetChatIdStr) throws TelegramApiException {
+        try {
+            Long targetChatId = Long.parseLong(targetChatIdStr);
+            BotUser user = botUserRepository.findById(targetChatId).orElse(null);
+
+            if (user == null) {
+                sendMessage(requestorChatId, "❌ Bu ID'ye sahip kullanıcı bulunamadı.");
+                return;
+            }
+
+            if (user.getIsAdmin() != null && user.getIsAdmin()) {
+                sendMessage(requestorChatId, "⚠️ Bu kullanıcı zaten admin!");
+                return;
+            }
+
+            user.setIsAdmin(true);
+            botUserRepository.save(user);
+
+            sendMessage(requestorChatId, "✅ " + user.getFirstName() + " artık admin!");
+            sendMessage(targetChatId, "🔧 Size admin yetkisi verildi!");
+
+        } catch (NumberFormatException e) {
+            sendMessage(requestorChatId, "❌ Geçersiz Chat ID formatı!");
+        }
+    }
+
+    private void removeAdmin(Long requestorChatId, String targetChatIdStr) throws TelegramApiException {
+        try {
+            Long targetChatId = Long.parseLong(targetChatIdStr);
+
+            // Kendini admin'likten çıkaramaz
+            if (requestorChatId.equals(targetChatId)) {
+                sendMessage(requestorChatId, "❌ Kendinizi admin'likten çıkaramazsınız!");
+                return;
+            }
+
+            BotUser user = botUserRepository.findById(targetChatId).orElse(null);
+
+            if (user == null) {
+                sendMessage(requestorChatId, "❌ Bu ID'ye sahip kullanıcı bulunamadı.");
+                return;
+            }
+
+            if (user.getIsAdmin() == null || !user.getIsAdmin()) {
+                sendMessage(requestorChatId, "⚠️ Bu kullanıcı zaten admin değil!");
+                return;
+            }
+
+            user.setIsAdmin(false);
+            botUserRepository.save(user);
+
+            sendMessage(requestorChatId, "✅ " + user.getFirstName() + " artık admin değil!");
+            sendMessage(targetChatId, "⚠️ Admin yetkiniz kaldırıldı.");
+
+        } catch (NumberFormatException e) {
+            sendMessage(requestorChatId, "❌ Geçersiz Chat ID formatı!");
+        }
     }
 }
