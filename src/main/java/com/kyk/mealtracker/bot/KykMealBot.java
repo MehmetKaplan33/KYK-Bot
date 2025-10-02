@@ -68,7 +68,7 @@ public class KykMealBot extends TelegramLongPollingBot {
             // Admin komutları kontrolü
             if (messageText.startsWith("/admin_")) {
                 if (!adminService.isAdmin(chatId)) {
-                    sendMessage(chatId, "⛔ Bu komutu kullanma yetkiniz yok!");
+                    sendMessage(chatId, "🚫 Bu komutu kullanma yetkiniz bulunmuyor.");
                     return;
                 }
                 handleAdminCommand(chatId, messageText);
@@ -98,16 +98,16 @@ public class KykMealBot extends TelegramLongPollingBot {
                     if (adminService.isAdmin(chatId)) {
                         sendMessage(chatId, adminService.getBotStats());
                     } else {
-                        sendMessage(chatId, "⛔ Bu komutu kullanma yetkiniz yok!");
+                        sendMessage(chatId, "🚫 Bu komutu kullanma yetkiniz bulunmuyor.");
                     }
                     break;
                 default:
-                    sendMessage(chatId, "Anlaşılamadı. Komutları görmek için /yardim yazın.");
+                    sendMessage(chatId, "❓ Komut anlaşılamadı. Yardım için /yardim yazabilirsiniz.");
             }
         } catch (Exception e) {
             logger.error("Message handling error for chatId: " + chatId, e);
             try {
-                sendMessage(chatId, "Bir hata oluştu. Lütfen daha sonra tekrar deneyin.");
+                sendMessage(chatId, "⚠️ Bir hata oluştu. Lütfen daha sonra tekrar deneyin.");
             } catch (TelegramApiException ex) {
                 logger.error("Error sending error message", ex);
             }
@@ -124,33 +124,38 @@ public class KykMealBot extends TelegramLongPollingBot {
                 break;
             case "/admin_broadcast":
                 if (parts.length < 2) {
-                    sendMessage(chatId, "Lütfen gönderilecek mesajı yazın.\nÖrnek: /admin_broadcast Merhaba!");
+                    sendMessage(chatId, "⚠️ Kullanım: /admin_broadcast [mesaj]\n\nÖrnek:\n/admin_broadcast Bugün yemekhanede bakım çalışması yapılacaktır.");
                     return;
                 }
-                broadcastMessage(parts[1]);
-                sendMessage(chatId, "✅ Mesaj tüm kullanıcılara gönderildi!");
+                int userCount = broadcastMessage(parts[1]);
+                sendMessage(chatId, "✅ Mesaj başarıyla gönderildi!\n👥 Toplam " + userCount + " kullanıcıya ulaştırıldı.");
                 break;
             case "/admin_stats":
                 sendMessage(chatId, adminService.getBotStats());
                 break;
             default:
-                sendMessage(chatId, "Geçersiz admin komutu!");
+                sendMessage(chatId, "❌ Geçersiz komut. /yardim ile komutları görüntüleyin.");
         }
     }
 
-    private void broadcastMessage(String message) {
+    private int broadcastMessage(String message) {
         List<BotUser> allUsers = botUserRepository.findAll();
+        int successCount = 0;
+
         for (BotUser user : allUsers) {
             try {
                 SendMessage sendMessage = new SendMessage();
                 sendMessage.setChatId(user.getChatId());
-                sendMessage.setText("📢 Yönetici Duyurusu:\n\n" + message);
+                sendMessage.setText("📢 Duyuru\n\n" + message);
                 execute(sendMessage);
+                successCount++;
                 Thread.sleep(50); // Rate limiting için küçük bir gecikme
             } catch (Exception e) {
                 logger.error("Broadcast message failed for user: " + user.getChatId(), e);
             }
         }
+
+        return successCount;
     }
 
     private void saveOrUpdateUser(Long chatId, User user) {
@@ -175,31 +180,30 @@ public class KykMealBot extends TelegramLongPollingBot {
         BotUser user = botUserRepository.findById(chatId).orElseThrow();
         user.setNotificationsEnabled(true);
         botUserRepository.save(user);
-        sendMessage(chatId, "✅ Günlük menü bildirimleri açıldı! Her sabah saat 07:00'de menüyü size ileteceğim.");
+        sendMessage(chatId, "🔔 Bildirimler aktif edildi!\nHer gün sabah 07:00'de günün menüsünü size ileteceğim.");
     }
 
     private void disableNotifications(Long chatId) throws TelegramApiException {
         BotUser user = botUserRepository.findById(chatId).orElseThrow();
         user.setNotificationsEnabled(false);
         botUserRepository.save(user);
-        sendMessage(chatId, "❌ Günlük menü bildirimleri kapatıldı!");
+        sendMessage(chatId, "🔕 Bildirimler kapatıldı.");
     }
 
     private void sendWelcomeMessage(Long chatId) throws TelegramApiException {
         String message = """
-                🎉 KYK Yemek Botuna Hoş Geldiniz!
+                👋 KYK Yemek Menüsü Botuna Hoş Geldiniz!
                 
-                Bu bot size günlük yemek menüsünü gösterir ve hatırlatır.
+                Bu bot ile günlük yemek menülerini takip edebilir ve bildirim alabilirsiniz.
                 
-                Kullanabileceğiniz komutlar:
+                🔹 Komutlar:
                 /bugun - Bugünün menüsü
                 /yarin - Yarının menüsü
                 /bildirim_ac - Günlük bildirimleri aç
-                /bildirim_kapat - Günlük bildirimleri kapat
-                /yardim - Tüm komutları göster
+                /bildirim_kapat - Bildirimleri kapat
+                /yardim - Komut listesi
                 
-                Varsayılan olarak günlük bildirimler açıktır.
-                Her sabah 07:00'de o günün menüsünü size göndereceğim!
+                💡 İpucu: Bildirimler varsayılan olarak açıktır.
                 """;
         sendMessage(chatId, message);
     }
@@ -218,53 +222,62 @@ public class KykMealBot extends TelegramLongPollingBot {
 
     private void sendMealMessage(Long chatId, LocalDate date, List<Meal> meals) throws TelegramApiException {
         if (meals.isEmpty()) {
-            sendMessage(chatId, date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", new Locale("tr"))) +
-                    " tarihli menü henüz yayınlanmamış.");
+            String formattedDate = date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", new Locale("tr")));
+            sendMessage(chatId, "📅 " + formattedDate + " tarihine ait menü henüz yayınlanmamış.\n\nMenü yayınlandığında bildirim almak için /bildirim_ac komutunu kullanabilirsiniz.");
             return;
         }
 
         StringBuilder messageBuilder = new StringBuilder();
-        messageBuilder.append("📅 ").append(date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", new Locale("tr")))).append("\n\n");
+        String formattedDate = date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", new Locale("tr")));
+        messageBuilder.append("📅 ").append(formattedDate).append("\n");
+        messageBuilder.append("━━━━━━━━━━━━━━━━━━\n\n");
 
         meals.stream()
                 .filter(meal -> meal.getMealType() == 0)
                 .findFirst()
-                .ifPresent(breakfast -> formatMeal(messageBuilder, "🌅 KAHVALTI", breakfast));
-
-        messageBuilder.append("\n");
+                .ifPresent(breakfast -> {
+                    formatMeal(messageBuilder, "🌅 KAHVALTI", breakfast);
+                    messageBuilder.append("\n");
+                });
 
         meals.stream()
                 .filter(meal -> meal.getMealType() == 1)
                 .findFirst()
-                .ifPresent(dinner -> formatMeal(messageBuilder, "🌙 AKŞAM YEMEĞİ", dinner));
+                .ifPresent(dinner -> formatMeal(messageBuilder, "🍽️ AKŞAM YEMEĞİ", dinner));
 
         sendMessage(chatId, messageBuilder.toString());
     }
 
     private void formatMeal(StringBuilder builder, String title, Meal meal) {
         builder.append(title).append(" (").append(meal.getTotalCalories()).append(" kcal)").append("\n");
-        builder.append("• ").append(meal.getFirst()).append(" (").append(meal.getFirstCalories()).append(" kcal)").append("\n");
-        builder.append("• ").append(meal.getSecond()).append(" (").append(meal.getSecondCalories()).append(" kcal)").append("\n");
-        builder.append("• ").append(meal.getThird()).append(" (").append(meal.getThirdCalories()).append(" kcal)").append("\n");
-        builder.append("• ").append(meal.getFourth()).append(" (").append(meal.getFourthCalories()).append(" kcal)").append("\n");
+        builder.append("━━━━━━━━━━━━━━━━━━\n");
+        builder.append("✓ ").append(meal.getFirst()).append(" (").append(meal.getFirstCalories()).append(" kcal)").append("\n");
+        builder.append("✓ ").append(meal.getSecond()).append(" (").append(meal.getSecondCalories()).append(" kcal)").append("\n");
+        builder.append("✓ ").append(meal.getThird()).append(" (").append(meal.getThirdCalories()).append(" kcal)").append("\n");
+        builder.append("✓ ").append(meal.getFourth()).append(" (").append(meal.getFourthCalories()).append(" kcal)").append("\n");
     }
 
     private void sendHelpMessage(Long chatId) throws TelegramApiException {
         String helpMessage = """
-                📋 Kullanılabilir Komutlar:
+                ℹ️ Komut Listesi
                 
-                /bugun - Bugünün menüsünü göster
-                /yarin - Yarının menüsünü göster
-                /bildirim_ac - Günlük bildirimleri aç
-                /bildirim_kapat - Günlük bildirimleri kapat
-                /yardim - Bu mesajı göster
+                📱 Menü Komutları:
+                /bugun - Bugünkü menüyü göster
+                /yarin - Yarınki menüyü göster
+                
+                🔔 Bildirim Ayarları:
+                /bildirim_ac - Günlük bildirimleri aktif et
+                /bildirim_kapat - Bildirimleri kapat
+                
+                ❓ Diğer:
+                /yardim - Bu listeyi göster
                 """ + (adminService.isAdmin(chatId) ? """
                 
-                🔧 Admin Komutları:
-                /stats - Bot istatistiklerini göster
-                /admin_list - Kullanıcıları listele
-                /admin_broadcast - Tüm kullanıcılara mesaj gönder
-                /admin_stats - Detaylı istatistikler
+                🔧 Yönetici Komutları:
+                /stats - Genel istatistikler
+                /admin_list - Kullanıcı listesi
+                /admin_broadcast - Toplu mesaj gönder
+                /admin_stats - Detaylı analiz
                 """ : "");
         sendMessage(chatId, helpMessage);
     }
