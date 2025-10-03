@@ -192,7 +192,7 @@ Chat ID'nizi öğrenmek için `/admin_list` komutunu kullanın (başka bir admin
 
 ## 📝 Lisans
 
-MIT License - Detaylar için [LICENSE](LICENSE) dosyasına bakın.
+MIT License - Detaylar için (https://opensource.org/licenses/MIT). dosyasına bakın.
 
 ## 🤝 Katkıda Bulunma
 
@@ -204,7 +204,7 @@ MIT License - Detaylar için [LICENSE](LICENSE) dosyasına bakın.
 
 ## 📧 İletişim
 
-Sorularınız için [GitHub Issues](https://github.com/kullaniciadi/kyk-meal-bot/issues) kullanabilirsiniz.
+Sorularınız için [GitHub Issues](https://github.com/MehmetKaplan33/kyk-meal-bot/issues) kullanabilirsiniz.
 
 ---
 
