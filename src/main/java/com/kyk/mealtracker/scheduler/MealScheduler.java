@@ -53,12 +53,10 @@ public class MealScheduler {
 
         logger.info("Günlük yemek kontrolü tamamlandı.");
 
-        // Menü güncellemesi bittikten sonra bildirimleri gönder
-        sendDailyNotifications();
     }
 
-    // Her sabah 07:00'de günlük menü bildirimlerini gönder
-    @Scheduled(cron = "0 0 7 * * ?")
+    // Her sabah 06:30'de günlük menü bildirimlerini gönder
+    @Scheduled(cron = "0 30 6 * * ?")
     public void sendDailyNotifications() {
         LocalDate today = LocalDate.now();
         List<Meal> todaysMeals = mealService.getMealsByDate(today);
