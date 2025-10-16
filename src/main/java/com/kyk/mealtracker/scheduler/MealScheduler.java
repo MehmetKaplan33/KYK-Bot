@@ -35,7 +35,7 @@ public class MealScheduler {
         LocalDate today = LocalDate.now();
         LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
 
-        logger.info("Günlük yemek kontrolü başlatıl��yor... Tarih: {}", today);
+        logger.info("Günlük yemek kontrolü başlatılıyor... Tarih: {}", today);
 
         // Bugünden ay sonuna kadar olan tarihleri kontrol et
         for (LocalDate date = today; !date.isAfter(endOfMonth); date = date.plusDays(1)) {
@@ -55,9 +55,9 @@ public class MealScheduler {
 
     }
 
-    // Her sabah 06:30'de günlük menü bildirimlerini gönder
+    // Her sabah 06:30'de sadece KAHVALTI menüsü bildirimi gönder
     @Scheduled(cron = "0 30 6 * * ?")
-    public void sendDailyNotifications() {
+    public void sendBreakfastNotifications() {
         LocalDate today = LocalDate.now();
         List<Meal> todaysMeals = mealService.getMealsByDate(today);
 
@@ -74,32 +74,65 @@ public class MealScheduler {
                 StringBuilder messageBuilder = new StringBuilder();
                 String dateStr = today.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", new Locale("tr")));
 
-                messageBuilder.append("🌟 Günaydın! İşte bugünün menüsü:\n\n");
+                messageBuilder.append("🌟 Günaydın! İşte bugünün kahvaltı menüsü:\n\n");
                 messageBuilder.append("📅 ").append(dateStr).append("\n\n");
 
                 // Kahvaltı menüsü
                 todaysMeals.stream()
-                    .filter(meal -> meal.getMealType() == 0)
-                    .findFirst()
-                    .ifPresent(breakfast -> appendMealDetails(messageBuilder, "🌅 KAHVALTI", breakfast));
+                        .filter(meal -> meal.getMealType() == 0)
+                        .findFirst()
+                        .ifPresent(breakfast -> appendMealDetails(messageBuilder, "🌅 KAHVALTI", breakfast));
 
-                messageBuilder.append("\n");
+                kykMealBot.execute(org.telegram.telegrambots.meta.api.methods.send.SendMessage.builder()
+                        .chatId(user.getChatId())
+                        .text(messageBuilder.toString())
+                        .build());
+
+                logger.info("Kahvaltı bildirimi gönderildi - ChatId: {}", user.getChatId());
+
+            } catch (Exception e) {
+                logger.error("Kahvaltı bildirimi gönderilemedi - ChatId: " + user.getChatId(), e);
+            }
+        }
+    }
+
+    // Her öğleden sonra 14:00'te sadece AKŞAM YEMEĞİ bildirimi gönder
+    @Scheduled(cron = "0 0 14 * * ?")
+    public void sendDinnerNotifications() {
+        LocalDate today = LocalDate.now();
+        List<Meal> todaysMeals = mealService.getMealsByDate(today);
+
+        if (todaysMeals.isEmpty()) {
+            logger.info("Bugün için menü bulunamadı: {}", today);
+            return;
+        }
+
+        // Bildirimleri açık olan tüm kullanıcıları bul
+        List<BotUser> activeUsers = botUserRepository.findByNotificationsEnabledTrue();
+
+        for (BotUser user : activeUsers) {
+            try {
+                StringBuilder messageBuilder = new StringBuilder();
+                String dateStr = today.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", new Locale("tr")));
+
+                messageBuilder.append("🌟 Afiyet olsun! İşte bugünün akşam yemeği menüsü:\n\n");
+                messageBuilder.append("📅 ").append(dateStr).append("\n\n");
 
                 // Akşam yemeği menüsü
                 todaysMeals.stream()
-                    .filter(meal -> meal.getMealType() == 1)
-                    .findFirst()
-                    .ifPresent(dinner -> appendMealDetails(messageBuilder, "🌙 AKŞAM YEMEĞİ", dinner));
+                        .filter(meal -> meal.getMealType() == 1)
+                        .findFirst()
+                        .ifPresent(dinner -> appendMealDetails(messageBuilder, "🌙 AKŞAM YEMEĞİ", dinner));
 
                 kykMealBot.execute(org.telegram.telegrambots.meta.api.methods.send.SendMessage.builder()
-                    .chatId(user.getChatId())
-                    .text(messageBuilder.toString())
-                    .build());
+                        .chatId(user.getChatId())
+                        .text(messageBuilder.toString())
+                        .build());
 
-                logger.info("Bildirim gönderildi - ChatId: {}", user.getChatId());
+                logger.info("Akşam yemeği bildirimi gönderildi - ChatId: {}", user.getChatId());
 
             } catch (Exception e) {
-                logger.error("Bildirim gönderilemedi - ChatId: " + user.getChatId(), e);
+                logger.error("Akşam yemeği bildirimi gönderilemedi - ChatId: " + user.getChatId(), e);
             }
         }
     }
@@ -110,9 +143,9 @@ public class MealScheduler {
             Meal[] meals = restTemplate.getForObject(url, Meal[].class);
             if (meals != null) {
                 Arrays.stream(meals)
-                      .filter(meal -> meal.getDate().equals(date))
-                      .findFirst()
-                      .ifPresent(mealService::saveMealIfNotExists);
+                        .filter(meal -> meal.getDate().equals(date))
+                        .findFirst()
+                        .ifPresent(mealService::saveMealIfNotExists);
             }
         } catch (Exception e) {
             logger.error("API çağrısı hatası - URL: {}, Hata: {}", url, e.getMessage());
