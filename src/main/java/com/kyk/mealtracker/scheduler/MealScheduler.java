@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -52,7 +51,6 @@ public class MealScheduler {
         }
 
         logger.info("Günlük yemek kontrolü tamamlandı.");
-
     }
 
     // Her sabah 06:30'de sadece KAHVALTI menüsü bildirimi gönder
@@ -61,8 +59,13 @@ public class MealScheduler {
         LocalDate today = LocalDate.now();
         List<Meal> todaysMeals = mealService.getMealsByDate(today);
 
-        if (todaysMeals.isEmpty()) {
-            logger.info("Bugün için menü bulunamadı: {}", today);
+        // Geçerli menüleri filtrele
+        List<Meal> validMeals = todaysMeals.stream()
+                .filter(this::isValidMeal)
+                .toList();
+
+        if (validMeals.isEmpty()) {
+            logger.info("Bugün için geçerli menü bulunamadı: {}", today);
             return;
         }
 
@@ -78,7 +81,7 @@ public class MealScheduler {
                 messageBuilder.append("📅 ").append(dateStr).append("\n\n");
 
                 // Kahvaltı menüsü
-                todaysMeals.stream()
+                validMeals.stream()
                         .filter(meal -> meal.getMealType() == 0)
                         .findFirst()
                         .ifPresent(breakfast -> appendMealDetails(messageBuilder, "🌅 KAHVALTI", breakfast));
@@ -102,8 +105,13 @@ public class MealScheduler {
         LocalDate today = LocalDate.now();
         List<Meal> todaysMeals = mealService.getMealsByDate(today);
 
-        if (todaysMeals.isEmpty()) {
-            logger.info("Bugün için menü bulunamadı: {}", today);
+        // Geçerli menüleri filtrele
+        List<Meal> validMeals = todaysMeals.stream()
+                .filter(this::isValidMeal)
+                .toList();
+
+        if (validMeals.isEmpty()) {
+            logger.info("Bugün için geçerli menü bulunamadı: {}", today);
             return;
         }
 
@@ -119,7 +127,7 @@ public class MealScheduler {
                 messageBuilder.append("📅 ").append(dateStr).append("\n\n");
 
                 // Akşam yemeği menüsü
-                todaysMeals.stream()
+                validMeals.stream()
                         .filter(meal -> meal.getMealType() == 1)
                         .findFirst()
                         .ifPresent(dinner -> appendMealDetails(messageBuilder, "🌙 AKŞAM YEMEĞİ", dinner));
@@ -144,6 +152,7 @@ public class MealScheduler {
             if (meals != null) {
                 Arrays.stream(meals)
                         .filter(meal -> meal.getDate().equals(date))
+                        .filter(this::isValidMeal)
                         .findFirst()
                         .ifPresent(mealService::saveMealIfNotExists);
             }
@@ -153,11 +162,97 @@ public class MealScheduler {
         }
     }
 
+    // Yemeğin geçerli olup olmadığını kontrol eder
+    private boolean isValidMeal(Meal meal) {
+        if (meal == null) {
+            return false;
+        }
+
+        // Tüm yemek alanlarını kontrol et
+        String[] items = {
+                meal.getFirst(),
+                meal.getSecond(),
+                meal.getThird(),
+                meal.getFourth()
+        };
+
+        // Null veya boş kontrolü
+        int validItemCount = 0;
+        for (String item : items) {
+            if (item == null || item.trim().isEmpty()) {
+                continue;
+            }
+
+            String lowerItem = item.toLowerCase().trim();
+
+            // Email adresi içeriyor mu?
+            if (lowerItem.contains("@") || lowerItem.contains("mail")) {
+                logger.warn("Geçersiz menü tespit edildi (email içeriyor): {} - {}", meal.getDate(), item);
+                return false;
+            }
+
+            // Bilgilendirme mesajı içeriyor mu?
+            if (lowerItem.contains("gönderip") ||
+                    lowerItem.contains("katkı sağla") ||
+                    lowerItem.contains("uygulamaya") ||
+                    lowerItem.contains("listesini") ||
+                    lowerItem.contains("daha hızlı") ||
+                    lowerItem.contains("girilmesine")) {
+                logger.warn("Geçersiz menü tespit edildi (bilgilendirme mesajı): {} - {}", meal.getDate(), item);
+                return false;
+            }
+
+            // Geçerli bir yemek adı olabilir mi? (en az 3 karakter, en fazla 100 karakter)
+            if (item.trim().length() >= 3 && item.trim().length() <= 100) {
+                validItemCount++;
+            }
+        }
+
+        // En az 3 geçerli yemek adı olmalı
+        if (validItemCount < 3) {
+            logger.warn("Geçersiz menü tespit edildi (yetersiz yemek sayısı): {} - Geçerli sayı: {}",
+                    meal.getDate(), validItemCount);
+            return false;
+        }
+
+        logger.info("Geçerli menü bulundu: {} - Tip: {} - Yemekler: {}",
+                meal.getDate(), meal.getMealType(), validItemCount);
+        return true;
+    }
+
     private void appendMealDetails(StringBuilder builder, String title, Meal meal) {
-        builder.append(title).append(" (").append(meal.getTotalCalories()).append(" kcal)\n");
-        builder.append("• ").append(meal.getFirst()).append(" (").append(meal.getFirstCalories()).append(" kcal)\n");
-        builder.append("• ").append(meal.getSecond()).append(" (").append(meal.getSecondCalories()).append(" kcal)\n");
-        builder.append("• ").append(meal.getThird()).append(" (").append(meal.getThirdCalories()).append(" kcal)\n");
-        builder.append("• ").append(meal.getFourth()).append(" (").append(meal.getFourthCalories()).append(" kcal)\n");
+        Integer totalCal = meal.getTotalCalories();
+
+        builder.append(title);
+        if (totalCal != null && totalCal > 0) {
+            builder.append(" (").append(totalCal).append(" kcal)");
+        }
+        builder.append("\n");
+
+        appendMealItem(builder, meal.getFirst(), meal.getFirstCalories());
+        appendMealItem(builder, meal.getSecond(), meal.getSecondCalories());
+        appendMealItem(builder, meal.getThird(), meal.getThirdCalories());
+        appendMealItem(builder, meal.getFourth(), meal.getFourthCalories());
+    }
+
+    private void appendMealItem(StringBuilder builder, String item, String calories) {
+        builder.append("• ").append(item);
+        Integer cal = parseCalories(calories);
+        if (cal != null && cal > 0) {
+            builder.append(" (").append(cal).append(" kcal)");
+        }
+        builder.append("\n");
+    }
+
+    // Yardımcı metod: String kaloriyi Integer'a çevirir
+    private Integer parseCalories(String calorieStr) {
+        if (calorieStr == null || calorieStr.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(calorieStr.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }
