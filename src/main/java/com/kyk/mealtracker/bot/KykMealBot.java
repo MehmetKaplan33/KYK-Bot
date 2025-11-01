@@ -203,7 +203,7 @@ public class KykMealBot extends TelegramLongPollingBot {
         BotUser user = botUserRepository.findById(chatId).orElseThrow();
         user.setNotificationsEnabled(true);
         botUserRepository.save(user);
-        sendMessage(chatId, "🔔 Bildirimler aktif edildi!\nHer gün sabah 07:00'de günün menüsünü size ileteceğim.");
+        sendMessage(chatId, "🔔 Bildirimler aktif edildi!\nHer gün sabah 06:30'da kahvaltı ve öğleden sonra 14:00'te akşam yemeği menüsünü size ileteceğim.");
     }
 
     private void disableNotifications(Long chatId) throws TelegramApiException {
@@ -244,7 +244,12 @@ public class KykMealBot extends TelegramLongPollingBot {
     }
 
     private void sendMealMessage(Long chatId, LocalDate date, List<Meal> meals) throws TelegramApiException {
-        if (meals.isEmpty()) {
+        // Geçerli menüleri filtrele
+        List<Meal> validMeals = meals.stream()
+                .filter(this::isValidMealForDisplay)
+                .toList();
+
+        if (validMeals.isEmpty()) {
             String formattedDate = date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", new Locale("tr")));
             sendMessage(chatId, "📅 " + formattedDate + " tarihine ait menü henüz yayınlanmamış.\n\nMenü yayınlandığında bildirim almak için /bildirim_ac komutunu kullanabilirsiniz.");
             return;
@@ -255,7 +260,7 @@ public class KykMealBot extends TelegramLongPollingBot {
         messageBuilder.append("📅 ").append(formattedDate).append("\n");
         messageBuilder.append("━━━━━━━━━━━━━━━━━━\n\n");
 
-        meals.stream()
+        validMeals.stream()
                 .filter(meal -> meal.getMealType() == 0)
                 .findFirst()
                 .ifPresent(breakfast -> {
@@ -263,7 +268,7 @@ public class KykMealBot extends TelegramLongPollingBot {
                     messageBuilder.append("\n");
                 });
 
-        meals.stream()
+        validMeals.stream()
                 .filter(meal -> meal.getMealType() == 1)
                 .findFirst()
                 .ifPresent(dinner -> formatMeal(messageBuilder, "🍽️ AKŞAM YEMEĞİ", dinner));
@@ -272,12 +277,86 @@ public class KykMealBot extends TelegramLongPollingBot {
     }
 
     private void formatMeal(StringBuilder builder, String title, Meal meal) {
-        builder.append(title).append(" (").append(meal.getTotalCalories()).append(" kcal)").append("\n");
+        Integer totalCal = meal.getTotalCalories();
+
+        builder.append(title);
+        if (totalCal != null && totalCal > 0) {
+            builder.append(" (").append(totalCal).append(" kcal)");
+        }
+        builder.append("\n");
         builder.append("━━━━━━━━━━━━━━━━━━\n");
-        builder.append("✓ ").append(meal.getFirst()).append(" (").append(meal.getFirstCalories()).append(" kcal)").append("\n");
-        builder.append("✓ ").append(meal.getSecond()).append(" (").append(meal.getSecondCalories()).append(" kcal)").append("\n");
-        builder.append("✓ ").append(meal.getThird()).append(" (").append(meal.getThirdCalories()).append(" kcal)").append("\n");
-        builder.append("✓ ").append(meal.getFourth()).append(" (").append(meal.getFourthCalories()).append(" kcal)").append("\n");
+
+        formatMealItem(builder, meal.getFirst(), meal.getFirstCalories());
+        formatMealItem(builder, meal.getSecond(), meal.getSecondCalories());
+        formatMealItem(builder, meal.getThird(), meal.getThirdCalories());
+        formatMealItem(builder, meal.getFourth(), meal.getFourthCalories());
+    }
+
+    private void formatMealItem(StringBuilder builder, String item, String calories) {
+        builder.append("✓ ").append(item);
+        Integer cal = parseCalories(calories);
+        if (cal != null && cal > 0) {
+            builder.append(" (").append(cal).append(" kcal)");
+        }
+        builder.append("\n");
+    }
+
+    // Yemeğin geçerli olup olmadığını kontrol eder
+    private boolean isValidMealForDisplay(Meal meal) {
+        if (meal == null) {
+            return false;
+        }
+
+        String[] items = {
+                meal.getFirst(),
+                meal.getSecond(),
+                meal.getThird(),
+                meal.getFourth()
+        };
+
+        int validItemCount = 0;
+        for (String item : items) {
+            if (item == null || item.trim().isEmpty()) {
+                continue;
+            }
+
+            String lowerItem = item.toLowerCase().trim();
+
+            // Email adresi içeriyor mu?
+            if (lowerItem.contains("@") || lowerItem.contains("mail")) {
+                return false;
+            }
+
+            // Bilgilendirme mesajı içeriyor mu?
+            if (lowerItem.contains("gönderip") ||
+                    lowerItem.contains("katkı sağla") ||
+                    lowerItem.contains("uygulamaya") ||
+                    lowerItem.contains("listesini") ||
+                    lowerItem.contains("daha hızlı") ||
+                    lowerItem.contains("girilmesine")) {
+                return false;
+            }
+
+            // Geçerli bir yemek adı olabilir mi? (en az 3 karakter, en fazla 100 karakter)
+            if (item.trim().length() >= 3 && item.trim().length() <= 100) {
+                validItemCount++;
+            }
+        }
+
+        // En az 3 geçerli yemek adı olmalı
+        return validItemCount >= 3;
+    }
+
+    // Yardımcı metod: String kaloriyi Integer'a çevirir
+    private Integer parseCalories(String calorieStr) {
+        if (calorieStr == null || calorieStr.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(calorieStr.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private void sendHelpMessage(Long chatId) throws TelegramApiException {

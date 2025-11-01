@@ -1,151 +1,72 @@
-2025-10-03 01:54:07 [KykMealBot Telegram Connection] ERROR o.t.t.u.DefaultBotSession - Connection reset
-java.net.SocketException: Connection reset
-	at java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:317)
-	at java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:345)
-	at java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:790)
-	at java.base/java.net.Socket$SocketInputStream.implRead(Socket.java:983)
-	at java.base/java.net.Socket$SocketInputStream.read(Socket.java:970)
-	at java.base/sun.security.ssl.SSLSocketInputRecord.read(SSLSocketInputRecord.java:489)
-	at java.base/sun.security.ssl.SSLSocketInputRecord.readHeader(SSLSocketInputRecord.java:483)
-	at java.base/sun.security.ssl.SSLSocketInputRecord.bytesInCompletePacket(SSLSocketInputRecord.java:70)
-	at java.base/sun.security.ssl.SSLSocketImpl.readApplicationRecord(SSLSocketImpl.java:1461)
-	at java.base/sun.security.ssl.SSLSocketImpl$AppInputStream.read(SSLSocketImpl.java:1068)
-	at org.apache.http.impl.io.SessionInputBufferImpl.streamRead(SessionInputBufferImpl.java:137)
-	at org.apache.http.impl.io.SessionInputBufferImpl.fillBuffer(SessionInputBufferImpl.java:153)
-	at org.apache.http.impl.io.SessionInputBufferImpl.readLine(SessionInputBufferImpl.java:280)
-	at org.apache.http.impl.conn.DefaultHttpResponseParser.parseHead(DefaultHttpResponseParser.java:138)
-	at org.apache.http.impl.conn.DefaultHttpResponseParser.parseHead(DefaultHttpResponseParser.java:56)
-	at org.apache.http.impl.io.AbstractMessageParser.parse(AbstractMessageParser.java:259)
-	at org.apache.http.impl.DefaultBHttpClientConnection.receiveResponseHeader(DefaultBHttpClientConnection.java:163)
-	at org.apache.http.impl.conn.CPoolProxy.receiveResponseHeader(CPoolProxy.java:157)
-	at org.apache.http.protocol.HttpRequestExecutor.doReceiveResponse(HttpRequestExecutor.java:273)
-	at org.apache.http.protocol.HttpRequestExecutor.execute(HttpRequestExecutor.java:125)
-	at org.apache.http.impl.execchain.MainClientExec.execute(MainClientExec.java:272)
-	at org.apache.http.impl.execchain.ProtocolExec.execute(ProtocolExec.java:186)
-	at org.apache.http.impl.execchain.RetryExec.execute(RetryExec.java:89)
-	at org.apache.http.impl.execchain.RedirectExec.execute(RedirectExec.java:110)
-	at org.apache.http.impl.client.InternalHttpClient.doExecute(InternalHttpClient.java:185)
-	at org.apache.http.impl.client.CloseableHttpClient.execute(CloseableHttpClient.java:83)
-	at org.telegram.telegrambots.updatesreceivers.DefaultBotSession$ReaderThread.getUpdatesFromServer(DefaultBotSession.java:249)
-	at org.telegram.telegrambots.updatesreceivers.DefaultBotSession$ReaderThread.run(DefaultBotSession.java:188)
-2025-10-03 01:54:08 [KykMealBot Telegram Connection] ERROR o.t.t.u.DefaultBotSession - Bilinen böyle bir ana bilgisayar yok (api.telegram.org)
-java.net.UnknownHostException: Bilinen böyle bir ana bilgisayar yok (api.telegram.org)
-	at java.base/java.net.Inet6AddressImpl.lookupAllHostAddr(Native Method)
-	at java.base/java.net.Inet6AddressImpl.lookupAllHostAddr(Inet6AddressImpl.java:52)
-	at java.base/java.net.InetAddress$PlatformResolver.lookupByName(InetAddress.java:1128)
-	at java.base/java.net.InetAddress.getAddressesFromNameService(InetAddress.java:1697)
-	at java.base/java.net.InetAddress$NameServiceAddresses.get(InetAddress.java:1056)
-	at java.base/java.net.InetAddress.getAllByName0(InetAddress.java:1687)
-	at java.base/java.net.InetAddress.getAllByName(InetAddress.java:1568)
-	at org.apache.http.impl.conn.SystemDefaultDnsResolver.resolve(SystemDefaultDnsResolver.java:45)
-	at org.apache.http.impl.conn.DefaultHttpClientConnectionOperator.connect(DefaultHttpClientConnectionOperator.java:112)
-	at org.apache.http.impl.conn.PoolingHttpClientConnectionManager.connect(PoolingHttpClientConnectionManager.java:376)
-	at org.apache.http.impl.execchain.MainClientExec.establishRoute(MainClientExec.java:393)
-	at org.apache.http.impl.execchain.MainClientExec.execute(MainClientExec.java:236)
-	at org.apache.http.impl.execchain.ProtocolExec.execute(ProtocolExec.java:186)
-	at org.apache.http.impl.execchain.RetryExec.execute(RetryExec.java:89)
-	at org.apache.http.impl.execchain.RedirectExec.execute(RedirectExec.java:110)
-	at org.apache.http.impl.client.InternalHttpClient.doExecute(InternalHttpClient.java:185)
-	at org.apache.http.impl.client.CloseableHttpClient.execute(CloseableHttpClient.java:83)
-	at org.telegram.telegrambots.updatesreceivers.DefaultBotSession$ReaderThread.getUpdatesFromServer(DefaultBotSession.java:249)
-	at org.telegram.telegrambots.updatesreceivers.DefaultBotSession$ReaderThread.run(DefaultBotSession.java:188)
-2025-10-03 01:54:13 [HikariPool-1:housekeeper] WARN  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h32m58s477ms402µs700ns).
-2025-10-03 16:26:13 [HikariPool-1:housekeeper] WARN  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=14h21m33s614ms110µs700ns).
-2025-10-03 16:30:57 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
-2025-10-03 16:30:57 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
-2025-10-03 16:30:57 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - Günlük yemek kontrolü başlatıl��yor... Tarih: 2025-10-03
-2025-10-03 16:30:58 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-03 tarihli menüler kontrol edildi.
-2025-10-03 16:30:58 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-04 tarihli menüler kontrol edildi.
-2025-10-03 16:30:58 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-05 tarihli menüler kontrol edildi.
-2025-10-03 16:30:58 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-06 tarihli menüler kontrol edildi.
-2025-10-03 16:30:58 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-07 tarihli menüler kontrol edildi.
-2025-10-03 16:30:58 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-08 tarihli menüler kontrol edildi.
-2025-10-03 16:30:58 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-09 tarihli menüler kontrol edildi.
-2025-10-03 16:30:58 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-10 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-11 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-12 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-13 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-14 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-15 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-16 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-17 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-18 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-19 tarihli menüler kontrol edildi.
-2025-10-03 16:30:59 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-20 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-21 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-22 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-23 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-24 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-25 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-26 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-27 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-28 tarihli menüler kontrol edildi.
-2025-10-03 16:31:00 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-29 tarihli menüler kontrol edildi.
-2025-10-03 16:31:01 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-30 tarihli menüler kontrol edildi.
-2025-10-03 16:31:01 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - 2025-10-31 tarihli menüler kontrol edildi.
-2025-10-03 16:31:01 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - Günlük yemek kontrolü tamamlandı.
-2025-10-03 16:31:01 [scheduling-1] INFO  c.k.m.scheduler.MealScheduler - Bildirim gönderildi - ChatId: 5794011891
-2025-10-03 16:31:01 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
-2025-10-03 16:31:01 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2025-10-03 16:31:01 [scheduling-1] ERROR o.s.s.s.TaskUtils$LoggingErrorHandler - Unexpected error occurred in scheduled task
-org.springframework.dao.InvalidDataAccessApiUsageException: Session/EntityManager is closed
-	at org.springframework.orm.jpa.EntityManagerFactoryUtils.convertJpaAccessExceptionIfPossible(EntityManagerFactoryUtils.java:368)
-	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:246)
-	at org.springframework.orm.jpa.AbstractEntityManagerFactoryBean.translateExceptionIfPossible(AbstractEntityManagerFactoryBean.java:560)
-	at org.springframework.dao.support.ChainedPersistenceExceptionTranslator.translateExceptionIfPossible(ChainedPersistenceExceptionTranslator.java:61)
-	at org.springframework.dao.support.DataAccessUtils.translateIfNecessary(DataAccessUtils.java:343)
-	at org.springframework.dao.support.PersistenceExceptionTranslationInterceptor.invoke(PersistenceExceptionTranslationInterceptor.java:160)
-	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
-	at org.springframework.data.jpa.repository.support.CrudMethodMetadataPostProcessor$CrudMethodMetadataPopulatingMethodInterceptor.invoke(CrudMethodMetadataPostProcessor.java:136)
-	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
-	at org.springframework.aop.framework.JdkDynamicAopProxy.invoke(JdkDynamicAopProxy.java:223)
-	at jdk.proxy2/jdk.proxy2.$Proxy117.findByNotificationsEnabledTrue(Unknown Source)
-	at com.kyk.mealtracker.scheduler.MealScheduler.sendDailyNotifications(MealScheduler.java:72)
-	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
-	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:130)
-	at org.springframework.scheduling.support.ScheduledMethodRunnable.lambda$run$2(ScheduledMethodRunnable.java:124)
-	at io.micrometer.observation.Observation.observe(Observation.java:498)
-	at org.springframework.scheduling.support.ScheduledMethodRunnable.run(ScheduledMethodRunnable.java:124)
-	at org.springframework.scheduling.config.Task$OutcomeTrackingRunnable.run(Task.java:85)
-	at org.springframework.scheduling.support.DelegatingErrorHandlingRunnable.run(DelegatingErrorHandlingRunnable.java:54)
-	at org.springframework.scheduling.concurrent.ReschedulingRunnable.run(ReschedulingRunnable.java:96)
-	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
-	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:328)
-	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:309)
-	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1095)
-	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:619)
-	at java.base/java.lang.Thread.run(Thread.java:1447)
-Caused by: java.lang.IllegalStateException: Session/EntityManager is closed
-	at org.hibernate.internal.AbstractSharedSessionContract.checkOpen(AbstractSharedSessionContract.java:518)
-	at org.hibernate.engine.spi.SharedSessionContractImplementor.checkOpen(SharedSessionContractImplementor.java:186)
-	at org.hibernate.internal.AbstractSharedSessionContract.checkOpenOrWaitingForAutoClose(AbstractSharedSessionContract.java:536)
-	at org.hibernate.internal.SessionImpl.checkOpenOrWaitingForAutoClose(SessionImpl.java:622)
-	at org.hibernate.internal.SessionImpl.getPersistenceContext(SessionImpl.java:1847)
-	at org.hibernate.query.sqm.internal.ConcreteSqmSelectQueryPlan.lambda$new$1(ConcreteSqmSelectQueryPlan.java:137)
-	at org.hibernate.query.sqm.internal.ConcreteSqmSelectQueryPlan.withCacheableSqmInterpretation(ConcreteSqmSelectQueryPlan.java:439)
-	at org.hibernate.query.sqm.internal.ConcreteSqmSelectQueryPlan.performList(ConcreteSqmSelectQueryPlan.java:359)
-	at org.hibernate.query.sqm.internal.QuerySqmImpl.doList(QuerySqmImpl.java:380)
-	at org.hibernate.query.spi.AbstractSelectionQuery.list(AbstractSelectionQuery.java:143)
-	at org.hibernate.query.Query.getResultList(Query.java:120)
-	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
-	at org.springframework.orm.jpa.SharedEntityManagerCreator$DeferredQueryInvocationHandler.invoke(SharedEntityManagerCreator.java:419)
-	at jdk.proxy2/jdk.proxy2.$Proxy134.getResultList(Unknown Source)
-	at org.springframework.data.jpa.repository.query.JpaQueryExecution$CollectionExecution.doExecute(JpaQueryExecution.java:132)
-	at org.springframework.data.jpa.repository.query.JpaQueryExecution.execute(JpaQueryExecution.java:95)
-	at org.springframework.data.jpa.repository.query.AbstractJpaQuery.doExecute(AbstractJpaQuery.java:160)
-	at org.springframework.data.jpa.repository.query.AbstractJpaQuery.execute(AbstractJpaQuery.java:148)
-	at org.springframework.data.repository.core.support.RepositoryMethodInvoker.doInvoke(RepositoryMethodInvoker.java:170)
-	at org.springframework.data.repository.core.support.RepositoryMethodInvoker.invoke(RepositoryMethodInvoker.java:158)
-	at org.springframework.data.repository.core.support.QueryExecutorMethodInterceptor.doInvoke(QueryExecutorMethodInterceptor.java:170)
-	at org.springframework.data.repository.core.support.QueryExecutorMethodInterceptor.invoke(QueryExecutorMethodInterceptor.java:149)
-	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
-	at org.springframework.data.projection.DefaultMethodInvokingMethodInterceptor.invoke(DefaultMethodInvokingMethodInterceptor.java:69)
-	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
-	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:380)
-	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119)
-	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184)
-	at org.springframework.dao.support.PersistenceExceptionTranslationInterceptor.invoke(PersistenceExceptionTranslationInterceptor.java:138)
-	... 21 common frames omitted
-2025-10-03 16:31:01 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-10-05 18:41:03 [main] INFO  c.k.m.KykMealTrackerApplication - Starting KykMealTrackerApplication using Java 24.0.1 with PID 6552 (D:\Belgeler\Web uygulamaları\mealtracker\target\classes started by mehme in D:\Belgeler\Web uygulamaları\mealtracker)
+2025-10-05 18:41:03 [main] INFO  c.k.m.KykMealTrackerApplication - No active profile set, falling back to 1 default profile: "default"
+2025-10-05 18:41:03 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2025-10-05 18:41:03 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 46 ms. Found 2 JPA repository interfaces.
+2025-10-05 18:41:03 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2025-10-05 18:41:03 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-10-05 18:41:03 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.46]
+2025-10-05 18:41:04 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-10-05 18:41:04 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 971 ms
+2025-10-05 18:41:04 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2025-10-05 18:41:04 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.6.29.Final
+2025-10-05 18:41:04 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2025-10-05 18:41:04 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2025-10-05 18:41:04 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-10-05 18:41:04 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@41143873
+2025-10-05 18:41:04 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-10-05 18:41:04 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2025-10-05 18:41:04 [main] INFO  o.hibernate.orm.connections.pooling - HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 17.5
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2025-10-05 18:41:05 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2025-10-05 18:41:05 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2025-10-05 18:41:06 [main] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2025-10-05 18:41:06 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-10-05 18:41:07 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path '/'
+2025-10-05 18:41:07 [main] INFO  c.k.m.KykMealTrackerApplication - Started KykMealTrackerApplication in 4.489 seconds (process running for 5.237)
+2025-10-05 18:42:38 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-10-05 18:42:38 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-10-05 18:42:38 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2025-10-05 18:42:38 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-10-05 18:42:38 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-10-05 18:42:41 [main] INFO  c.k.m.KykMealTrackerApplication - Starting KykMealTrackerApplication using Java 24.0.1 with PID 7336 (D:\Belgeler\Web uygulamaları\mealtracker\target\classes started by mehme in D:\Belgeler\Web uygulamaları\mealtracker)
+2025-10-05 18:42:41 [main] INFO  c.k.m.KykMealTrackerApplication - No active profile set, falling back to 1 default profile: "default"
+2025-10-05 18:42:42 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2025-10-05 18:42:42 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 33 ms. Found 2 JPA repository interfaces.
+2025-10-05 18:42:42 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2025-10-05 18:42:42 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-10-05 18:42:42 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.46]
+2025-10-05 18:42:42 [main] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-10-05 18:42:42 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 785 ms
+2025-10-05 18:42:42 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2025-10-05 18:42:42 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.6.29.Final
+2025-10-05 18:42:42 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2025-10-05 18:42:42 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2025-10-05 18:42:43 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-10-05 18:42:43 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@473847fb
+2025-10-05 18:42:43 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-10-05 18:42:43 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2025-10-05 18:42:43 [main] INFO  o.hibernate.orm.connections.pooling - HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 17.5
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2025-10-05 18:42:43 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2025-10-05 18:42:43 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2025-10-05 18:42:44 [main] WARN  o.s.b.a.o.j.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2025-10-05 18:42:44 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-10-05 18:42:44 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path '/'
+2025-10-05 18:42:44 [main] INFO  c.k.m.KykMealTrackerApplication - Started KykMealTrackerApplication in 3.365 seconds (process running for 3.841)
+2025-10-05 18:49:14 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-10-05 18:49:14 [tomcat-shutdown] INFO  o.s.b.w.e.tomcat.GracefulShutdown - Graceful shutdown complete
+2025-10-05 18:49:14 [SpringApplicationShutdownHook] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Closing JPA EntityManagerFactory for persistence unit 'default'
+2025-10-05 18:49:14 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-10-05 18:49:14 [SpringApplicationShutdownHook] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
