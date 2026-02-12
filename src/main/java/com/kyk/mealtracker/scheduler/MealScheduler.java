@@ -221,10 +221,10 @@ public class MealScheduler {
     }
 
     private void appendMealDetails(StringBuilder builder, String title, Meal meal) {
-        Integer totalCal = meal.getTotalCalories();
+        String totalCal = meal.getTotalCalories(); // Integer yerine String
 
         builder.append(title);
-        if (totalCal != null && totalCal > 0) {
+        if (totalCal != null && !totalCal.trim().isEmpty()) {
             builder.append(" (").append(totalCal).append(" kcal)");
         }
         builder.append("\n");
@@ -236,23 +236,13 @@ public class MealScheduler {
     }
 
     private void appendMealItem(StringBuilder builder, String item, String calories) {
+        if (item == null || item.trim().isEmpty()) return;
+
         builder.append("• ").append(item);
-        Integer cal = parseCalories(calories);
-        if (cal != null && cal > 0) {
-            builder.append(" (").append(cal).append(" kcal)");
+        if (calories != null && !calories.trim().isEmpty()) {
+            builder.append(" (").append(calories).append(" kcal)");
         }
         builder.append("\n");
     }
 
-    // Yardımcı metod: String kaloriyi Integer'a çevirir
-    private Integer parseCalories(String calorieStr) {
-        if (calorieStr == null || calorieStr.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(calorieStr.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
 }

@@ -277,10 +277,10 @@ public class KykMealBot extends TelegramLongPollingBot {
     }
 
     private void formatMeal(StringBuilder builder, String title, Meal meal) {
-        Integer totalCal = meal.getTotalCalories();
+        String totalCal = meal.getTotalCalories(); // String olarak alıyoruz
 
         builder.append(title);
-        if (totalCal != null && totalCal > 0) {
+        if (totalCal != null && !totalCal.trim().isEmpty()) {
             builder.append(" (").append(totalCal).append(" kcal)");
         }
         builder.append("\n");
