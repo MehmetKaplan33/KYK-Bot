@@ -161,11 +161,14 @@ public class KykMealBot extends TelegramLongPollingBot {
 
         switch (cmd) {
             case "/admin_list":
-                int page = 0;
+                int page = 1;
                 if (parts.length > 1) {
-                    try { page = Integer.parseInt(parts[1]); } catch (Exception ignored) {}
+                    try { 
+                        page = Integer.parseInt(parts[1].trim()); 
+                        if (page < 1) page = 1;
+                    } catch (Exception ignored) {}
                 }
-                sendMessage(chatId, adminService.getUserList(page));
+                sendMessage(chatId, adminService.getUserList(page - 1));
                 break;
             case "/admin_broadcast":
                 if (parts.length < 2) {
@@ -215,8 +218,11 @@ public class KykMealBot extends TelegramLongPollingBot {
                 }
                 break;
             case "/admin_user":
-                if (parts.length < 2) return;
-                sendUserDetails(chatId, parts[1]);
+                if (parts.length < 2) {
+                    sendMessage(chatId, "⚠️ Kullanım: /admin_user [chatId]");
+                    return;
+                }
+                sendUserDetails(chatId, parts[1].trim());
                 break;
             default:
                 sendMessage(chatId, "❌ Geçersiz komut. /yardim ile komutları görüntüleyin.");
@@ -371,6 +377,7 @@ public class KykMealBot extends TelegramLongPollingBot {
                 /bildirim_ac - Bildirimleri aç
                 /bildirim_kapat - Bildirimleri kapat
                 /yardim - Komut listesi
+                """ + (adminService.isAdmin(chatId) ? "\n🔧 Yönetici yetkiniz aktif." : "") + """
                 
                 💡 İpucu: Bildirimler varsayılan olarak 1 (Adana) plakasına göre açıktır.
                 """;
@@ -417,19 +424,27 @@ public class KykMealBot extends TelegramLongPollingBot {
             
             if (!dayMeals.isEmpty()) {
                 hasAny = true;
-                sb.append("📅 ").append(date.format(DateTimeFormatter.ofPattern("dd MMM", new Locale("tr")))).append(":\n");
-                dayMeals.stream().filter(m -> m.getMealType() == 0).findFirst()
-                    .ifPresent(m -> sb.append("🌅 Kahvaltı: ").append(m.getFirst() != null ? m.getFirst() : "-").append("...\n"));
-                dayMeals.stream().filter(m -> m.getMealType() == 1).findFirst()
-                    .ifPresent(m -> sb.append("🍽️ Akşam: ").append(m.getFirst() != null ? m.getFirst() : "-").append("...\n"));
-                sb.append("\n");
+                sb.append("📅 *").append(date.format(DateTimeFormatter.ofPattern("dd MMMM EEEE", new Locale("tr")))).append("*\n");
+                
+                dayMeals.stream().filter(m -> m.getMealType() == 0).findFirst().ifPresent(m -> {
+                    sb.append("🌅 K: ").append(m.getFirst()).append(", ").append(m.getSecond()).append("\n");
+                });
+                
+                dayMeals.stream().filter(m -> m.getMealType() == 1).findFirst().ifPresent(m -> {
+                    sb.append("🍽️ A: ").append(m.getFirst()).append(", ").append(m.getSecond()).append("\n");
+                });
+                sb.append("────────────────\n");
             }
         }
         
         if (hasAny) {
-            sendMessage(chatId, sb.toString());
+            SendMessage sm = new SendMessage();
+            sm.setChatId(chatId);
+            sm.setText(sb.toString());
+            sm.setParseMode("Markdown");
+            execute(sm);
         } else {
-            sendMessage(chatId, "Bu hafta için sistemde hiç menü bulunamadı.");
+            sendMessage(chatId, "❌ Bu hafta için sistemde hiç menü bulunamadı.");
         }
     }
 
