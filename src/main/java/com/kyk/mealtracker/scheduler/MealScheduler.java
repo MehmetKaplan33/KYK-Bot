@@ -14,7 +14,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -23,34 +22,15 @@ import java.util.Locale;
 public class MealScheduler {
 
     private final MealService mealService;
-    private final RestTemplate restTemplate;
     private final KykMealBot kykMealBot;
     private final BotUserRepository botUserRepository;
+    private final com.kyk.mealtracker.services.MealSyncService mealSyncService;
     private static final Logger logger = LoggerFactory.getLogger(MealScheduler.class);
 
     // Her gün sabah 06:00'da menüleri çek
     @Scheduled(cron = "0 0 6 * * ?")
     public void fetchDailyMeals() {
-        LocalDate today = LocalDate.now();
-        LocalDate endOfMonth = today.withDayOfMonth(today.lengthOfMonth());
-
-        logger.info("Günlük yemek kontrolü başlatılıyor... Tarih: {}", today);
-
-        // Bugünden ay sonuna kadar olan tarihleri kontrol et
-        for (LocalDate date = today; !date.isAfter(endOfMonth); date = date.plusDays(1)) {
-            try {
-                // Kahvaltı menüsü
-                checkAndSaveMeal(date, 0);
-                // Akşam yemeği menüsü
-                checkAndSaveMeal(date, 1);
-
-                logger.info("{} tarihli menüler kontrol edildi.", date);
-            } catch (Exception e) {
-                logger.error("{} tarihli menü kontrolünde hata: {}", date, e.getMessage());
-            }
-        }
-
-        logger.info("Günlük yemek kontrolü tamamlandı.");
+        mealSyncService.fetchMealsForAllActiveCities();
     }
 
     // Her sabah 06:30'de sadece KAHVALTI menüsü bildirimi gönder
@@ -59,9 +39,8 @@ public class MealScheduler {
         LocalDate today = LocalDate.now();
         List<Meal> todaysMeals = mealService.getMealsByDate(today);
 
-        // Geçerli menüleri filtrele
         List<Meal> validMeals = todaysMeals.stream()
-                .filter(this::isValidMeal)
+                .filter(this::isValidMealForDisplay)
                 .toList();
 
         if (validMeals.isEmpty()) {
@@ -105,9 +84,8 @@ public class MealScheduler {
         LocalDate today = LocalDate.now();
         List<Meal> todaysMeals = mealService.getMealsByDate(today);
 
-        // Geçerli menüleri filtrele
         List<Meal> validMeals = todaysMeals.stream()
-                .filter(this::isValidMeal)
+                .filter(this::isValidMealForDisplay)
                 .toList();
 
         if (validMeals.isEmpty()) {
@@ -145,79 +123,20 @@ public class MealScheduler {
         }
     }
 
-    private void checkAndSaveMeal(LocalDate date, int mealType) {
-        String url = String.format("https://kykyemekliste.com/api/menu/liste?cityId=1&mealType=%d", mealType);
-        try {
-            Meal[] meals = restTemplate.getForObject(url, Meal[].class);
-            if (meals != null) {
-                Arrays.stream(meals)
-                        .filter(meal -> meal.getDate().equals(date))
-                        .filter(this::isValidMeal)
-                        .findFirst()
-                        .ifPresent(mealService::saveMealIfNotExists);
-            }
-        } catch (Exception e) {
-            logger.error("API çağrısı hatası - URL: {}, Hata: {}", url, e.getMessage());
-            throw e;
-        }
-    }
-
-    // Yemeğin geçerli olup olmadığını kontrol eder
-    private boolean isValidMeal(Meal meal) {
-        if (meal == null) {
-            return false;
-        }
-
-        // Tüm yemek alanlarını kontrol et
-        String[] items = {
-                meal.getFirst(),
-                meal.getSecond(),
-                meal.getThird(),
-                meal.getFourth()
-        };
-
-        // Null veya boş kontrolü
+    private boolean isValidMealForDisplay(Meal meal) {
+        if (meal == null) return false;
+        String[] items = {meal.getFirst(), meal.getSecond(), meal.getThird(), meal.getFourth()};
         int validItemCount = 0;
         for (String item : items) {
-            if (item == null || item.trim().isEmpty()) {
-                continue;
-            }
-
+            if (item == null || item.trim().isEmpty()) continue;
             String lowerItem = item.toLowerCase().trim();
-
-            // Email adresi içeriyor mu?
-            if (lowerItem.contains("@") || lowerItem.contains("mail")) {
-                logger.warn("Geçersiz menü tespit edildi (email içeriyor): {} - {}", meal.getDate(), item);
-                return false;
-            }
-
-            // Bilgilendirme mesajı içeriyor mu?
-            if (lowerItem.contains("gönderip") ||
-                    lowerItem.contains("katkı sağla") ||
-                    lowerItem.contains("uygulamaya") ||
-                    lowerItem.contains("listesini") ||
-                    lowerItem.contains("daha hızlı") ||
-                    lowerItem.contains("girilmesine")) {
-                logger.warn("Geçersiz menü tespit edildi (bilgilendirme mesajı): {} - {}", meal.getDate(), item);
-                return false;
-            }
-
-            // Geçerli bir yemek adı olabilir mi? (en az 3 karakter, en fazla 100 karakter)
-            if (item.trim().length() >= 3 && item.trim().length() <= 100) {
-                validItemCount++;
-            }
+            if (lowerItem.contains("@") || lowerItem.contains("mail") || lowerItem.contains("gönderip") ||
+                lowerItem.contains("katkı sağla") || lowerItem.contains("uygulamaya") ||
+                lowerItem.contains("listesini") || lowerItem.contains("daha hızlı") ||
+                lowerItem.contains("girilmesine")) return false;
+            if (item.trim().length() >= 3 && item.trim().length() <= 100) validItemCount++;
         }
-
-        // En az 3 geçerli yemek adı olmalı
-        if (validItemCount < 3) {
-            logger.warn("Geçersiz menü tespit edildi (yetersiz yemek sayısı): {} - Geçerli sayı: {}",
-                    meal.getDate(), validItemCount);
-            return false;
-        }
-
-        logger.info("Geçerli menü bulundu: {} - Tip: {} - Yemekler: {}",
-                meal.getDate(), meal.getMealType(), validItemCount);
-        return true;
+        return validItemCount >= 3;
     }
 
     private void appendMealDetails(StringBuilder builder, String title, Meal meal) {

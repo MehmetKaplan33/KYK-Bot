@@ -12,4 +12,8 @@ public interface MealRepository extends JpaRepository<Meal, Long> {
     void deleteByDateAndMealTypeAndCityId(LocalDate date, Integer mealType, Integer cityId);
     List<Meal> findByDate(LocalDate date);
     List<Meal> findByDateAndMealType(LocalDate date, Integer mealType);
+    List<Meal> findByDateAndCityId(LocalDate date, Integer cityId);
+    List<Meal> findByDateBetweenAndCityId(LocalDate startDate, LocalDate endDate, Integer cityId);
+    void deleteByDate(LocalDate date);
+    void deleteByDateAndCityId(LocalDate date, Integer cityId);
 }

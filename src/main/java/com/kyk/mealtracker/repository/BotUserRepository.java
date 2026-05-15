@@ -14,4 +14,9 @@ public interface BotUserRepository extends JpaRepository<BotUser, Long> {
     long countByLastActivityDateAfter(LocalDateTime date);
 
     long countByLastInteractionDateAfter(LocalDateTime date);
+
+    List<BotUser> findByIsAdminTrue();
+
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT b.cityId FROM BotUser b WHERE b.cityId IS NOT NULL")
+    List<Integer> findDistinctCityIds();
 }

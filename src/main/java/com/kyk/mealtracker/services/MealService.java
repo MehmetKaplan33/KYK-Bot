@@ -65,4 +65,9 @@ public class MealService {
     public List<Meal> getMealsByDateAndType(LocalDate date, Integer mealType) {
         return mealRepository.findByDateAndMealType(date, mealType);
     }
+
+    @Transactional
+    public void deleteMealsByDate(LocalDate date) {
+        mealRepository.deleteByDate(date);
+    }
 }

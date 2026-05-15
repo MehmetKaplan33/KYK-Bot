@@ -16,33 +16,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MealController {
 
-    private final MealService mealService;
+    private final com.kyk.mealtracker.services.MealSyncService mealSyncService;
 
     @GetMapping("/fetchMeals")
     public ResponseEntity<String> fetchMeals() {
         try {
-            RestTemplate restTemplate = new RestTemplate();
-            List<Meal> allMeals = new ArrayList<>();
-
-            // Kahvaltı
-            String breakfastUrl = "https://kykyemekliste.com/api/menu/liste?cityId=1&mealType=0";
-            Meal[] breakfastMeals = restTemplate.getForObject(breakfastUrl, Meal[].class);
-            if (breakfastMeals != null) {
-                allMeals.addAll(Arrays.asList(breakfastMeals));
-            }
-
-            // Akşam yemeği
-            String dinnerUrl = "https://kykyemekliste.com/api/menu/liste?cityId=1&mealType=1";
-            Meal[] dinnerMeals = restTemplate.getForObject(dinnerUrl, Meal[].class);
-            if (dinnerMeals != null) {
-                allMeals.addAll(Arrays.asList(dinnerMeals));
-            }
-
-            if (allMeals.isEmpty()) {
-                return ResponseEntity.badRequest().body("Yemek verileri alınamadı!");
-            }
-
-            mealService.saveAllMeals(allMeals);
+            mealSyncService.fetchMealsForAllActiveCities();
             return ResponseEntity.ok("Yemekler başarıyla çekildi ve kaydedildi!");
 
         } catch (Exception e) {

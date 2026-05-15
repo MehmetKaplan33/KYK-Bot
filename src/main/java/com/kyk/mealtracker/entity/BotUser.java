@@ -34,4 +34,7 @@ public class BotUser {
 
     @Column(name = "last_activity_date")
     private LocalDateTime lastActivityDate;
+
+    @Column(name = "city_id")
+    private Integer cityId;
 }
