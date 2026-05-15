@@ -13,11 +13,17 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+
+import java.util.ArrayList;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -63,6 +69,11 @@ public class KykMealBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
+        if (update.hasCallbackQuery()) {
+            handleCallbackQuery(update.getCallbackQuery());
+            return;
+        }
+
         if (!update.hasMessage()) {
             return;
         }
@@ -106,6 +117,34 @@ public class KykMealBot extends TelegramLongPollingBot {
             } catch (TelegramApiException ex) {
                 logger.error("Error sending error message", ex);
             }
+        }
+    }
+
+    private void handleCallbackQuery(CallbackQuery callbackQuery) {
+        String data = callbackQuery.getData();
+        Long chatId = callbackQuery.getMessage().getChatId();
+
+        try {
+            if (data.startsWith("week_meal:")) {
+                String dateStr = data.substring(10);
+                LocalDate date = LocalDate.parse(dateStr);
+                
+                BotUser user = botUserRepository.findById(chatId).orElseThrow();
+                int cityId = user.getCityId() != null ? user.getCityId() : 1;
+                
+                List<Meal> meals = mealService.getMealsByDate(date).stream()
+                        .filter(m -> m.getCityId() != null && m.getCityId() == cityId)
+                        .toList();
+                
+                sendMealMessage(chatId, date, meals);
+                
+                // Answer callback to remove loading state
+                AnswerCallbackQuery answer = new AnswerCallbackQuery();
+                answer.setCallbackQueryId(callbackQuery.getId());
+                execute(answer);
+            }
+        } catch (Exception e) {
+            logger.error("Callback query error", e);
         }
     }
 
@@ -161,14 +200,13 @@ public class KykMealBot extends TelegramLongPollingBot {
 
         switch (cmd) {
             case "/admin_list":
-                int page = 1;
+                int page = 0;
                 if (parts.length > 1) {
                     try { 
                         page = Integer.parseInt(parts[1].trim()); 
-                        if (page < 1) page = 1;
                     } catch (Exception ignored) {}
                 }
-                sendMessage(chatId, adminService.getUserList(page - 1));
+                sendMessage(chatId, adminService.getUserList(page));
                 break;
             case "/admin_broadcast":
                 if (parts.length < 2) {
@@ -404,48 +442,29 @@ public class KykMealBot extends TelegramLongPollingBot {
 
     private void sendWeeklyMeals(Long chatId) throws TelegramApiException {
         LocalDate today = LocalDate.now();
-        LocalDate nextWeek = today.plusDays(6);
-        BotUser user = botUserRepository.findById(chatId).orElseThrow();
-        int cityId = user.getCityId() != null ? user.getCityId() : 1;
+        SendMessage sm = new SendMessage();
+        sm.setChatId(chatId);
+        sm.setText("🗓️ Önümüzdeki 7 günden birini seçin:");
         
-        List<Meal> meals = mealService.getMealsByDate(today); // Fallback if no between available
-        // Actually, I need a specific query for this or I can iterate.
-        // Let's iterate.
-        sendMessage(chatId, "🗓️ Önümüzdeki 7 Günlük Menü Özeti yükleniyor...");
-        StringBuilder sb = new StringBuilder();
-        boolean hasAny = false;
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         
         for (int i = 0; i <= 6; i++) {
             LocalDate date = today.plusDays(i);
-            List<Meal> dayMeals = mealService.getMealsByDate(date).stream()
-                .filter(m -> m.getCityId() != null && m.getCityId() == cityId)
-                .filter(this::isValidMealForDisplay)
-                .toList();
+            String label = date.format(DateTimeFormatter.ofPattern("dd MMMM EEEE", new Locale("tr")));
             
-            if (!dayMeals.isEmpty()) {
-                hasAny = true;
-                sb.append("📅 *").append(date.format(DateTimeFormatter.ofPattern("dd MMMM EEEE", new Locale("tr")))).append("*\n");
-                
-                dayMeals.stream().filter(m -> m.getMealType() == 0).findFirst().ifPresent(m -> {
-                    sb.append("🌅 K: ").append(m.getFirst()).append(", ").append(m.getSecond()).append("\n");
-                });
-                
-                dayMeals.stream().filter(m -> m.getMealType() == 1).findFirst().ifPresent(m -> {
-                    sb.append("🍽️ A: ").append(m.getFirst()).append(", ").append(m.getSecond()).append("\n");
-                });
-                sb.append("────────────────\n");
-            }
+            InlineKeyboardButton button = new InlineKeyboardButton();
+            button.setText(label);
+            button.setCallbackData("week_meal:" + date.toString());
+            
+            List<InlineKeyboardButton> row = new ArrayList<>();
+            row.add(button);
+            rows.add(row);
         }
         
-        if (hasAny) {
-            SendMessage sm = new SendMessage();
-            sm.setChatId(chatId);
-            sm.setText(sb.toString());
-            sm.setParseMode("Markdown");
-            execute(sm);
-        } else {
-            sendMessage(chatId, "❌ Bu hafta için sistemde hiç menü bulunamadı.");
-        }
+        markup.setKeyboard(rows);
+        sm.setReplyMarkup(markup);
+        execute(sm);
     }
 
     private void sendMealMessage(Long chatId, LocalDate date, List<Meal> meals) throws TelegramApiException {
