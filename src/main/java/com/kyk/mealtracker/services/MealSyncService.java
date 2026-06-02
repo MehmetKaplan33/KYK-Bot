@@ -52,7 +52,7 @@ public class MealSyncService {
     }
 
     private void checkAndSaveMeal(LocalDate date, int mealType, int cityId) {
-        String url = String.format("https://kykyemekliste.com/api/menu/liste?cityId=%d&mealType=%d", cityId, mealType);
+        String url = String.format("https://kykyemekliste.com/yurt-tunnel/menu/liste?cityId=%d&mealType=%d", cityId, mealType);
         try {
             Meal[] meals = restTemplate.getForObject(url, Meal[].class);
             if (meals != null) {
