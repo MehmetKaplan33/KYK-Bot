@@ -1,5 +1,6 @@
 package com.kyk.mealtracker.scheduler;
 
+import com.kyk.mealtracker.bot.BotKeyboardHelper;
 import com.kyk.mealtracker.bot.KykMealBot;
 import com.kyk.mealtracker.entity.BotUser;
 import com.kyk.mealtracker.entity.Meal;
@@ -46,24 +47,34 @@ public class MealScheduler {
         mealSyncService.fetchMealsForAllActiveCities();
     }
 
-    // Her sabah 06:30'da sadece KAHVALTI bildirimi (Kullanıcının kendi şehrine özel)
-    @Scheduled(cron = "0 30 6 * * ?", zone = "Europe/Istanbul")
-    public void sendBreakfastNotifications() {
-        sendMealNotifications(0, "🌅 GÜNAYDIN! BUGÜNÜN KAHVALTISI", "⏰ 06:30 - 12:00");
+    // Her saat başı çalışır ve o saat dilimini seçmiş kullanıcılara bildirim gönderir
+    @Scheduled(cron = "0 0 * * * ?", zone = "Europe/Istanbul")
+    public void dispatchHourlyCustomNotifications() {
+        java.time.ZonedDateTime nowTr = java.time.ZonedDateTime.now(TURKEY_ZONE);
+        int currentHour = nowTr.getHour();
+        LocalDate today = nowTr.toLocalDate();
+
+        // Sabah Kahvaltısı: 06:00 - 11:00 arası bu saati seçenlere gönder
+        if (currentHour >= 6 && currentHour <= 11) {
+            List<BotUser> breakfastUsers = botUserRepository.findByNotificationsEnabledTrueAndBreakfastHour(currentHour);
+            if (!breakfastUsers.isEmpty()) {
+                logger.info("Saat {}:00 kahvaltı bildirimleri gönderiliyor (Kullanıcı Sayısı: {})", currentHour, breakfastUsers.size());
+                sendMealNotificationsToUsers(breakfastUsers, 0, today, "🍳 GÜNAYDIN! GÜNÜN KAHVALTISI", "⏰ 06:00 - 12:00");
+            }
+        }
+
+        // Akşam Yemeği: 14:00 - 19:00 arası bu saati seçenlere gönder
+        if (currentHour >= 14 && currentHour <= 19) {
+            List<BotUser> dinnerUsers = botUserRepository.findByNotificationsEnabledTrueAndDinnerHour(currentHour);
+            if (!dinnerUsers.isEmpty()) {
+                logger.info("Saat {}:00 akşam yemeği bildirimleri gönderiliyor (Kullanıcı Sayısı: {})", currentHour, dinnerUsers.size());
+                sendMealNotificationsToUsers(dinnerUsers, 1, today, "🍲 AFİYET OLSUN! AKŞAM YEMEĞİ", "⏰ 16:00 - 23:00");
+            }
+        }
     }
 
-    // Her gün 14:00'te sadece AKŞAM YEMEĞİ bildirimi (Kullanıcının kendi şehrine özel)
-    @Scheduled(cron = "0 0 14 * * ?", zone = "Europe/Istanbul")
-    public void sendDinnerNotifications() {
-        sendMealNotifications(1, "🍲 AFİYET OLSUN! AKŞAM YEMEĞİ", "⏰ 16:00 - 22:30");
-    }
-
-    private void sendMealNotifications(int mealType, String title, String timeRange) {
-        LocalDate today = LocalDate.now(TURKEY_ZONE);
-        List<BotUser> activeUsers = botUserRepository.findByNotificationsEnabledTrue();
-        logger.info("Bildirim gönderimi başlatılıyor. Öğün: {}, Kullanıcı Sayısı: {}", mealType, activeUsers.size());
-
-        for (BotUser user : activeUsers) {
+    private void sendMealNotificationsToUsers(List<BotUser> users, int mealType, LocalDate today, String title, String timeRange) {
+        for (BotUser user : users) {
             int cityId = user.getCityId() != null ? user.getCityId() : 1;
             String cityName = CityHelper.getCityName(cityId);
 
@@ -72,10 +83,7 @@ public class MealScheduler {
                     .filter(MealValidator::isValidMeal)
                     .toList();
 
-            if (meals.isEmpty()) {
-                // Kullanıcının şehrine ait menü yoksa boş başlık atmıyoruz
-                continue;
-            }
+            if (meals.isEmpty()) continue;
 
             Meal meal = meals.get(0);
             String text = MenuFormatter.formatSingleMealNotification(today, cityName, meal, title, timeRange);
@@ -85,13 +93,13 @@ public class MealScheduler {
                         .chatId(user.getChatId())
                         .text(text)
                         .parseMode("Markdown")
+                        .replyMarkup(BotKeyboardHelper.getMealActionKeyboard(today, cityId))
                         .build();
                 kykMealBot.execute(sm);
-                Thread.sleep(40); // Telegram flood limit koruması (25 msg/sec)
+                Thread.sleep(40);
             } catch (Exception e) {
-                logger.error("Bildirim gönderilemedi (ChatId: {}): {}", user.getChatId(), e.getMessage());
+                logger.error("Bildirim hatası (ChatId: {}): {}", user.getChatId(), e.getMessage());
             }
         }
-        logger.info("Bildirim gönderimi tamamlandı. Öğün: {}", mealType);
     }
 }

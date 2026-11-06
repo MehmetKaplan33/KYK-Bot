@@ -18,7 +18,9 @@ public final class BotKeyboardHelper {
     public static final String BTN_TODAY = "🍽️ Bugünün Menüsü";
     public static final String BTN_TOMORROW = "🌅 Yarının Menüsü";
     public static final String BTN_WEEKLY = "📅 Haftalık Menü";
+    public static final String BTN_SEARCH = "🔍 Yemek Ara";
     public static final String BTN_SETTINGS = "⚙️ Şehir / Ayarlar";
+    public static final String BTN_RANDOM = "🎲 Ne Yesem?";
     public static final String BTN_ADMIN = "🔧 Yönetici Paneli";
     public static final String BTN_HELP = "ℹ️ Yardım";
 
@@ -26,14 +28,14 @@ public final class BotKeyboardHelper {
 
     /**
      * Sohbet ekranının altında sürekli duran kalıcı menü klavyesi.
-     * Admin ise ekstra "🔧 Yönetici Paneli" satırı eklenir.
+     * Kullanıcıların aramayı ve karar çarkını kolayca görmesi için 3 satır tasarlandı.
      */
     public static ReplyKeyboardMarkup getMainReplyKeyboard(boolean isAdmin) {
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
         keyboardMarkup.setSelective(false);
         keyboardMarkup.setResizeKeyboard(true);
         keyboardMarkup.setOneTimeKeyboard(false);
-        keyboardMarkup.setIsPersistent(true); // Asla kaybolmaz
+        keyboardMarkup.setIsPersistent(true);
 
         List<KeyboardRow> keyboard = new ArrayList<>();
 
@@ -43,10 +45,15 @@ public final class BotKeyboardHelper {
 
         KeyboardRow row2 = new KeyboardRow();
         row2.add(new KeyboardButton(BTN_WEEKLY));
-        row2.add(new KeyboardButton(BTN_SETTINGS));
+        row2.add(new KeyboardButton(BTN_SEARCH));
+
+        KeyboardRow row3 = new KeyboardRow();
+        row3.add(new KeyboardButton(BTN_RANDOM));
+        row3.add(new KeyboardButton(BTN_SETTINGS));
 
         keyboard.add(row1);
         keyboard.add(row2);
+        keyboard.add(row3);
 
         if (isAdmin) {
             KeyboardRow adminRow = new KeyboardRow();
@@ -56,6 +63,43 @@ public final class BotKeyboardHelper {
 
         keyboardMarkup.setKeyboard(keyboard);
         return keyboardMarkup;
+    }
+
+    /**
+     * Günün yemeği için Puanlama ve Alternatif Butonları
+     */
+    public static InlineKeyboardMarkup getMealActionKeyboard(LocalDate date, int cityId) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        // Reaksiyon / Puanlama Satırı
+        List<InlineKeyboardButton> r1 = new ArrayList<>();
+        InlineKeyboardButton btnGood = new InlineKeyboardButton();
+        btnGood.setText("😋 Çok İyi");
+        btnGood.setCallbackData(String.format("rate_meal:5:%s:%d", date, cityId));
+        r1.add(btnGood);
+
+        InlineKeyboardButton btnMid = new InlineKeyboardButton();
+        btnMid.setText("😐 İdare Eder");
+        btnMid.setCallbackData(String.format("rate_meal:3:%s:%d", date, cityId));
+        r1.add(btnMid);
+
+        InlineKeyboardButton btnBad = new InlineKeyboardButton();
+        btnBad.setText("🤢 Kötü");
+        btnBad.setCallbackData(String.format("rate_meal:1:%s:%d", date, cityId));
+        r1.add(btnBad);
+        rows.add(r1);
+
+        // Ne Yesem Alternatif Butonu
+        List<InlineKeyboardButton> r2 = new ArrayList<>();
+        InlineKeyboardButton btnRandom = new InlineKeyboardButton();
+        btnRandom.setText("🎲 Menüyü Sevmedim, Ne Yesem?");
+        btnRandom.setCallbackData("action:random_food");
+        r2.add(btnRandom);
+        rows.add(r2);
+
+        markup.setKeyboard(rows);
+        return markup;
     }
 
     /**
@@ -153,7 +197,7 @@ public final class BotKeyboardHelper {
     /**
      * Ayarlar menüsü inline butonları
      */
-    public static InlineKeyboardMarkup getSettingsKeyboard(boolean notificationsEnabled) {
+    public static InlineKeyboardMarkup getSettingsKeyboard(boolean notificationsEnabled, int breakfastHour, int dinnerHour) {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
@@ -175,6 +219,85 @@ public final class BotKeyboardHelper {
         }
         r2.add(btnNotif);
         rows.add(r2);
+
+        // Bildirim Saatlerini Ayarlama Butonları
+        List<InlineKeyboardButton> r3 = new ArrayList<>();
+        InlineKeyboardButton btnBfTime = new InlineKeyboardButton();
+        btnBfTime.setText("🍳 Kahvaltı Saati: " + String.format("%02d:00", breakfastHour));
+        btnBfTime.setCallbackData("set_notif_time:breakfast");
+        r3.add(btnBfTime);
+        rows.add(r3);
+
+        List<InlineKeyboardButton> r4 = new ArrayList<>();
+        InlineKeyboardButton btnDnTime = new InlineKeyboardButton();
+        btnDnTime.setText("🍲 Akşam Saati: " + String.format("%02d:00", dinnerHour));
+        btnDnTime.setCallbackData("set_notif_time:dinner");
+        r4.add(btnDnTime);
+        rows.add(r4);
+
+        markup.setKeyboard(rows);
+        return markup;
+    }
+
+    /**
+     * Kahvaltı Saati Seçim Butonları
+     */
+    public static InlineKeyboardMarkup getBreakfastHourKeyboard() {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        int[] hours = {6, 7, 8, 9, 10, 11};
+        List<InlineKeyboardButton> row1 = new ArrayList<>();
+        List<InlineKeyboardButton> row2 = new ArrayList<>();
+
+        for (int i = 0; i < hours.length; i++) {
+            InlineKeyboardButton btn = new InlineKeyboardButton();
+            btn.setText(String.format("⏰ %02d:00", hours[i]));
+            btn.setCallbackData("save_hour:breakfast:" + hours[i]);
+            if (i < 3) row1.add(btn);
+            else row2.add(btn);
+        }
+        rows.add(row1);
+        rows.add(row2);
+
+        List<InlineKeyboardButton> backRow = new ArrayList<>();
+        InlineKeyboardButton btnBack = new InlineKeyboardButton();
+        btnBack.setText("🔙 Ayarlara Dön");
+        btnBack.setCallbackData("back_to_settings");
+        backRow.add(btnBack);
+        rows.add(backRow);
+
+        markup.setKeyboard(rows);
+        return markup;
+    }
+
+    /**
+     * Akşam Yemeği Saati Seçim Butonları
+     */
+    public static InlineKeyboardMarkup getDinnerHourKeyboard() {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        int[] hours = {14, 15, 16, 17, 18, 19};
+        List<InlineKeyboardButton> row1 = new ArrayList<>();
+        List<InlineKeyboardButton> row2 = new ArrayList<>();
+
+        for (int i = 0; i < hours.length; i++) {
+            InlineKeyboardButton btn = new InlineKeyboardButton();
+            btn.setText(String.format("⏰ %02d:00", hours[i]));
+            btn.setCallbackData("save_hour:dinner:" + hours[i]);
+            if (i < 3) row1.add(btn);
+            else row2.add(btn);
+        }
+        rows.add(row1);
+        rows.add(row2);
+
+        List<InlineKeyboardButton> backRow = new ArrayList<>();
+        InlineKeyboardButton btnBack = new InlineKeyboardButton();
+        btnBack.setText("🔙 Ayarlara Dön");
+        btnBack.setCallbackData("back_to_settings");
+        backRow.add(btnBack);
+        rows.add(backRow);
 
         markup.setKeyboard(rows);
         return markup;

@@ -15,16 +15,18 @@ public final class MenuFormatter {
 
     private MenuFormatter() {}
 
-    /**
-     * Günlük tam menü mesajı (Bugün / Yarın)
-     */
     public static String formatDailyMenu(LocalDate date, String cityName, List<Meal> meals) {
+        return formatDailyMenu(date, cityName, meals, null, null);
+    }
+
+    /**
+     * Günlük tam menü mesajı (Bugün / Yarın) - Sade, Okunabilir ve Hızlı Tasarım
+     */
+    public static String formatDailyMenu(LocalDate date, String cityName, List<Meal> meals, Double ratingScore, Long ratingCount) {
         StringBuilder sb = new StringBuilder();
-        
-        sb.append("╭━━━━━━━━━━━━━━━━━━━━━╮\n");
-        sb.append("  🏛 *").append(cityName.toUpperCase(TR)).append(" KYK YURTLARI*\n");
-        sb.append("  📅 ").append(date.format(DATE_FMT)).append("\n");
-        sb.append("╰━━━━━━━━━━━━━━━━━━━━━╯\n\n");
+
+        sb.append("📍 *").append(cityName).append(" KYK Yurtları*\n");
+        sb.append("📅 ").append(date.format(DATE_FMT)).append("\n\n");
 
         Meal breakfast = meals.stream()
                 .filter(m -> m.getMealType() != null && m.getMealType() == 0)
@@ -48,64 +50,96 @@ public final class MenuFormatter {
         String dinnerTime = "16:00 - 23:00";
 
         if (breakfast != null) {
-            appendRichMealBlock(sb, "🍳 SABAH KAHVALTISI", breakfast, breakfastTime);
+            appendMealBlock(sb, "🍳 KAHVALTI", breakfast, breakfastTime);
             sb.append("\n");
         } else {
-            sb.append("🍳 *SABAH KAHVALTISI*\n");
+            sb.append("🍳 *KAHVALTI* `(").append(breakfastTime).append(")`\n");
             sb.append("└ _Kahvaltı menüsü henüz girilmedi._\n\n");
         }
 
         if (dinner != null) {
-            appendRichMealBlock(sb, "🍲 AKŞAM YEMEĞİ", dinner, dinnerTime);
+            appendMealBlock(sb, "🍲 AKŞAM YEMEĞİ", dinner, dinnerTime);
         } else {
-            sb.append("🍲 *AKŞAM YEMEĞİ*\n");
+            sb.append("🍲 *AKŞAM YEMEĞİ* `(").append(dinnerTime).append(")`\n");
             sb.append("└ _Akşam menüsü henüz girilmedi._\n");
         }
 
-        sb.append("\n━━━━━━━━━━━━━━━━━━━━━━\n");
-        sb.append("✨ *Afiyet olsun!*");
-        return sb.toString();
+        // Öğrenci Puanı Göstergesi
+        if (ratingScore != null && ratingCount != null && ratingCount > 0) {
+            sb.append("\n⭐ *Öğrenci Puanı:* `").append(String.format(Locale.US, "%.1f", ratingScore))
+              .append(" / 5.0` (").append(ratingCount).append(" Oy)\n");
+        }
+
+        return sb.toString().trim();
     }
 
     /**
-     * Sabah veya Akşam tek öğün bildirim mesajı
+     * Günlük tekil bildirim mesajı (Kilit ekranında tek bakışta yemekleri gösterir)
      */
     public static String formatSingleMealNotification(LocalDate date, String cityName, Meal meal, String title, String timeRange) {
         StringBuilder sb = new StringBuilder();
-        sb.append("📢 *GÜNLÜK YEMEK BİLDİRİMİ*\n");
-        sb.append("📍 *").append(cityName).append(" KYK Yurtları*\n");
-        sb.append("📅 ").append(date.format(DATE_FMT)).append("\n");
-        sb.append("━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
-        appendRichMealBlock(sb, title, meal, timeRange);
+        sb.append(title).append(" `(").append(timeRange).append(")`\n");
+        sb.append("📍 *").append(cityName).append(" KYK Yurtları*\n\n");
 
-        sb.append("\n━━━━━━━━━━━━━━━━━━━━━━\n");
-        sb.append("✨ *Afiyet olsun!*");
-        return sb.toString();
+        appendMealItemsAndFooter(sb, meal);
+
+        return sb.toString().trim();
     }
 
-    private static void appendRichMealBlock(StringBuilder sb, String title, Meal meal, String timeRange) {
-        sb.append(title);
-        if (meal.getTotalCalories() != null && !meal.getTotalCalories().isBlank()) {
-            sb.append("  ⚡️ *").append(meal.getTotalCalories()).append(" kcal*");
+    private static void appendMealBlock(StringBuilder sb, String title, Meal meal, String timeRange) {
+        sb.append(title).append(" `(").append(timeRange).append(")`\n");
+        appendMealItemsAndFooter(sb, meal);
+    }
+
+    private static void appendMealItemsAndFooter(StringBuilder sb, Meal meal) {
+        appendItem(sb, meal.getFirst());
+        appendItem(sb, meal.getSecond());
+        appendItem(sb, meal.getThird());
+        appendItem(sb, meal.getFourth());
+
+        int totalCal = CalorieHelper.ensureTotalCalories(meal);
+        String smartTag = CalorieHelper.getShortTag(meal);
+
+        sb.append("⚡ `").append(totalCal).append(" kcal`");
+        if (!smartTag.isEmpty()) {
+            sb.append(" • ").append(smartTag);
         }
         sb.append("\n");
-        sb.append("⏰ *Servis:* `").append(timeRange).append("`\n");
-        sb.append("───────────────────────\n");
-
-        appendItem(sb, "🥣 1.", meal.getFirst(), meal.getFirstCalories());
-        appendItem(sb, "🥩 2.", meal.getSecond(), meal.getSecondCalories());
-        appendItem(sb, "🍚 3.", meal.getThird(), meal.getThirdCalories());
-        appendItem(sb, "🥗 4.", meal.getFourth(), meal.getFourthCalories());
     }
 
-    private static void appendItem(StringBuilder sb, String prefix, String name, String cal) {
+    private static void appendItem(StringBuilder sb, String name) {
         if (name == null || name.isBlank()) return;
-        sb.append(prefix).append(" *").append(name.trim()).append("*");
-        if (cal != null && !cal.isBlank()) {
-            sb.append("  `(").append(cal.trim()).append(" kcal)`");
+        String trimmed = name.trim();
+        String badge = detectBadge(trimmed);
+
+        sb.append("• ").append(trimmed);
+        if (!badge.isEmpty()) {
+            sb.append(" ").append(badge);
         }
         sb.append("\n");
+    }
+
+    private static String detectBadge(String item) {
+        String lower = item.toLowerCase(TR);
+        if (lower.contains("tavuk") || lower.contains("kebap") || lower.contains("köfte") ||
+            lower.contains("et") || lower.contains("kavurma") || lower.contains("baget") || lower.contains("döner")) {
+            return "🥩";
+        }
+        if (lower.contains("tatlı") || lower.contains("baklava") || lower.contains("triliçe") ||
+            lower.contains("pasta") || lower.contains("puding") || lower.contains("sütlaç") || lower.contains("helva") || lower.contains("kemalpaşa")) {
+            return "🍰";
+        }
+        if (lower.contains("pizza") || lower.contains("hamburger") || lower.contains("sosis") || lower.contains("sucuk")) {
+            return "🍕";
+        }
+        if (lower.contains("fasulye") || lower.contains("nohut") || lower.contains("barbunya") || lower.contains("bezelye") || lower.contains("ıspanak")) {
+            return "🥦";
+        }
+        if (lower.contains("salata") || lower.contains("cacık") || lower.contains("yoğurt") || lower.contains("meyve") || lower.contains("ayran")) {
+            return "🥗";
+        }
+        return "";
     }
 
     private static boolean isWeekend(LocalDate date) {

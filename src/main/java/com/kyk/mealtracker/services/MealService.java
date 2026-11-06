@@ -66,6 +66,10 @@ public class MealService {
         return mealRepository.findByDateAndMealType(date, mealType);
     }
 
+    public List<Meal> searchMeals(Integer cityId, LocalDate startDate, String keyword) {
+        return mealRepository.searchMealsByKeyword(cityId, startDate, keyword);
+    }
+
     @Transactional
     public void deleteMealsByDate(LocalDate date) {
         mealRepository.deleteByDate(date);

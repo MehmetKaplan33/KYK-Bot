@@ -14,6 +14,20 @@ public interface MealRepository extends JpaRepository<Meal, Long> {
     List<Meal> findByDateAndMealType(LocalDate date, Integer mealType);
     List<Meal> findByDateAndCityId(LocalDate date, Integer cityId);
     List<Meal> findByDateBetweenAndCityId(LocalDate startDate, LocalDate endDate, Integer cityId);
+
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT m FROM Meal m
+        WHERE m.cityId = :cityId
+          AND m.date >= :startDate
+          AND (
+            LOWER(m.first) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+            LOWER(m.second) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+            LOWER(m.third) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+            LOWER(m.fourth) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          )
+        ORDER BY m.date ASC
+    """)
+    List<Meal> searchMealsByKeyword(Integer cityId, LocalDate startDate, String keyword);
     void deleteByDate(LocalDate date);
     void deleteByDateAndCityId(LocalDate date, Integer cityId);
 }

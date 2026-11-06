@@ -9,6 +9,10 @@ import java.util.List;
 public interface BotUserRepository extends JpaRepository<BotUser, Long> {
     List<BotUser> findByNotificationsEnabledTrue();
 
+    List<BotUser> findByNotificationsEnabledTrueAndBreakfastHour(Integer breakfastHour);
+
+    List<BotUser> findByNotificationsEnabledTrueAndDinnerHour(Integer dinnerHour);
+
     long countByNotificationsEnabledTrue();
 
     long countByLastActivityDateAfter(LocalDateTime date);

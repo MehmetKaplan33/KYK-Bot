@@ -2,7 +2,9 @@ package com.kyk.mealtracker.bot;
 
 import com.kyk.mealtracker.entity.BotUser;
 import com.kyk.mealtracker.entity.Meal;
+import com.kyk.mealtracker.entity.MealRating;
 import com.kyk.mealtracker.repository.BotUserRepository;
+import com.kyk.mealtracker.repository.MealRatingRepository;
 import com.kyk.mealtracker.services.AdminService;
 import com.kyk.mealtracker.services.MealService;
 import com.kyk.mealtracker.services.MealSyncService;
@@ -22,12 +24,16 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,6 +47,18 @@ public class KykMealBot extends TelegramLongPollingBot {
     private final BotUserRepository botUserRepository;
     private final AdminService adminService;
     private final MealSyncService mealSyncService;
+    private final MealRatingRepository mealRatingRepository;
+
+    private static final List<String> RANDOM_FOOD_IDEAS = List.of(
+            "🌯 *Tavuk Döner & Ayran*\n_Öğrencinin ezeli ve ebedi kurtarıcısı. Yanına da biraz turşu!_",
+            "🍳 *Kaşarlı & Sucuklu Menemen*\n_Oda arkadaşınla ekmeği banmalık, sıcak ve pratik şaheser!_",
+            "🍝 *Kremalı Mantarlı Tavuklu Makarna*\n_Yurtta ocak varsa 15 dakikada restoran konforu._",
+            "🌯 *Çiğ Köfte Dürüm (Bol Nar Ekşili)*\n_Cebi yakmaz, mideyi doyurur. Yanına şalgam veya ayran harika gider!_",
+            "🍕 *Karışık Pizza veya Çıtır Lahmacun*\n_Bugün kendini ödüllendirme günü! Birkaç arkadaş birleşip söyleyebilirsiniz._",
+            "🥪 *Bol Kaşarlı Tost & Tavşan Kanı Çay*\n_Kantin klasiği. Sade ama her zaman mutlu eder._",
+            "🍜 *Noodle & Haşlanmış Yumurta*\n_Gece acıkmalarının ve sınav haftalarının baş tacı!_",
+            "🍲 *Sıcak Mercimek Çorbası & Kıtır Ekmek*\n_İçini ısıtır, anne eli değmiş gibi hissettirir._"
+    );
 
     private final ConcurrentHashMap<Long, Long> lastMessageTimes = new ConcurrentHashMap<>();
 
@@ -59,11 +77,13 @@ public class KykMealBot extends TelegramLongPollingBot {
     public KykMealBot(MealService mealService,
                       BotUserRepository botUserRepository,
                       AdminService adminService,
-                      MealSyncService mealSyncService) {
+                      MealSyncService mealSyncService,
+                      MealRatingRepository mealRatingRepository) {
         this.mealService = mealService;
         this.botUserRepository = botUserRepository;
         this.adminService = adminService;
         this.mealSyncService = mealSyncService;
+        this.mealRatingRepository = mealRatingRepository;
     }
 
     @Override
@@ -204,6 +224,14 @@ public class KykMealBot extends TelegramLongPollingBot {
             sendWeeklyMenuSelector(chatId);
             return;
         }
+        if (clean.equals(BotKeyboardHelper.BTN_SEARCH)) {
+            sendPlainMessage(chatId, "🔍 *Akıllı Yemek Arama*\n\nAramak istediğiniz yemeğin adını sohbete yazıp gönderin.\nÖrnek: `pizza`, `köfte`, `tavuk`, `makarna`, `tatlı`\n\n_Bot, önümüzdeki 30 gün içinde şehrinizde bu yemeğin çıkacağı tarihleri listeleyecektir._");
+            return;
+        }
+        if (clean.equals(BotKeyboardHelper.BTN_RANDOM)) {
+            sendRandomFoodSuggestion(chatId, null);
+            return;
+        }
         if (clean.equals(BotKeyboardHelper.BTN_SETTINGS) || clean.equals("/ayarlar")) {
             sendSettings(chatId);
             return;
@@ -238,7 +266,57 @@ public class KykMealBot extends TelegramLongPollingBot {
             return;
         }
 
-        sendPlainMessage(chatId, "❓ Komut anlaşılamadı. Aşağıdaki menü butonlarını kullanabilir veya /yardim yazabilirsiniz.");
+        // AKILLI YEMEK ARAMA (Örn: "pizza", "tavuk", "köfte")
+        if (clean.length() >= 3 && !clean.startsWith("/")) {
+            handleMealSearch(chatId, clean);
+            return;
+        }
+
+        sendPlainMessage(chatId, "❓ Komut anlaşılamadı. Menü butonlarını kullanabilir, bir yemek adı yazıp aratabilir veya /yardim yazabilirsiniz.");
+    }
+
+    private void handleMealSearch(Long chatId, String keyword) throws TelegramApiException {
+        BotUser user = botUserRepository.findById(chatId).orElseThrow();
+        int cityId = user.getCityId() != null ? user.getCityId() : 1;
+        String cityName = CityHelper.getCityName(cityId);
+
+        LocalDate today = LocalDate.now(TURKEY_ZONE);
+        List<Meal> results = mealService.searchMeals(cityId, today, keyword);
+
+        if (results.isEmpty()) {
+            sendPlainMessage(chatId, "🔍 *" + cityName + "* menüsünde `\"" + keyword + "\"` içeren bir yemek bulunamadı.");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("🔍 *\"").append(keyword).append("\" İçeren Menüler (").append(cityName).append(")*\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        DateTimeFormatter dFmt = DateTimeFormatter.ofPattern("dd MMMM EEEE", new java.util.Locale("tr", "TR"));
+
+        for (Meal m : results.stream().limit(8).toList()) {
+            sb.append("📅 *").append(m.getDate().format(dFmt)).append("* (")
+              .append(m.getMealType() == 0 ? "🍳 Kahvaltı" : "🍲 Akşam")
+              .append(")\n");
+
+            // Eşleşen öğeyi vurgula
+            appendMatchingItem(sb, m.getFirst(), keyword);
+            appendMatchingItem(sb, m.getSecond(), keyword);
+            appendMatchingItem(sb, m.getThird(), keyword);
+            appendMatchingItem(sb, m.getFourth(), keyword);
+            sb.append("\n");
+        }
+
+        sendPlainMessage(chatId, sb.toString());
+    }
+
+    private void appendMatchingItem(StringBuilder sb, String item, String keyword) {
+        if (item == null || item.isBlank()) return;
+        if (item.toLowerCase(new java.util.Locale("tr", "TR")).contains(keyword.toLowerCase(new java.util.Locale("tr", "TR")))) {
+            sb.append("  👉 *").append(item.trim()).append("*\n");
+        } else {
+            sb.append("  • ").append(item.trim()).append("\n");
+        }
     }
 
     private void handleCallbackQuery(CallbackQuery callbackQuery) {
@@ -291,20 +369,149 @@ public class KykMealBot extends TelegramLongPollingBot {
                 user.setNotificationsEnabled(enable);
                 botUserRepository.save(user);
 
+                int bfHour = user.getBreakfastHour() != null ? user.getBreakfastHour() : 7;
+                int dnHour = user.getDinnerHour() != null ? user.getDinnerHour() : 15;
+
                 EditMessageText em = EditMessageText.builder()
                         .chatId(chatId)
                         .messageId(messageId)
                         .text(enable ? "🔔 Günlük yemek bildirimleri aktif edildi!" : "🔕 Bildirimler kapatıldı.")
-                        .replyMarkup(BotKeyboardHelper.getSettingsKeyboard(enable))
+                        .replyMarkup(BotKeyboardHelper.getSettingsKeyboard(enable, bfHour, dnHour))
                         .build();
                 execute(em);
                 answerCallback(callbackQuery.getId(), enable ? "Bildirimler açıldı" : "Bildirimler kapatıldı");
                 return;
             }
 
+            if ("set_notif_time:breakfast".equals(data)) {
+                EditMessageText em = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text("🍳 Sabah kahvaltısı bildirimini saat kaçta almak istersiniz?")
+                        .replyMarkup(BotKeyboardHelper.getBreakfastHourKeyboard())
+                        .build();
+                execute(em);
+                answerCallback(callbackQuery.getId(), null);
+                return;
+            }
+
+            if ("set_notif_time:dinner".equals(data)) {
+                EditMessageText em = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text("🍲 Akşam yemeği bildirimini saat kaçta almak istersiniz?")
+                        .replyMarkup(BotKeyboardHelper.getDinnerHourKeyboard())
+                        .build();
+                execute(em);
+                answerCallback(callbackQuery.getId(), null);
+                return;
+            }
+
+            if (data.startsWith("save_hour:breakfast:")) {
+                int hour = Integer.parseInt(data.substring(20));
+                BotUser user = botUserRepository.findById(chatId).orElseThrow();
+                user.setBreakfastHour(hour);
+                botUserRepository.save(user);
+
+                int dnHour = user.getDinnerHour() != null ? user.getDinnerHour() : 15;
+                EditMessageText em = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text("✅ Sabah kahvaltısı bildirim saatiniz *" + String.format("%02d:00", hour) + "* olarak ayarlandı!")
+                        .parseMode("Markdown")
+                        .replyMarkup(BotKeyboardHelper.getSettingsKeyboard(user.isNotificationsEnabled(), hour, dnHour))
+                        .build();
+                execute(em);
+                answerCallback(callbackQuery.getId(), "Saat kaydedildi!");
+                return;
+            }
+
+            if (data.startsWith("save_hour:dinner:")) {
+                int hour = Integer.parseInt(data.substring(17));
+                BotUser user = botUserRepository.findById(chatId).orElseThrow();
+                user.setDinnerHour(hour);
+                botUserRepository.save(user);
+
+                int bfHour = user.getBreakfastHour() != null ? user.getBreakfastHour() : 7;
+                EditMessageText em = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text("✅ Akşam yemeği bildirim saatiniz *" + String.format("%02d:00", hour) + "* olarak ayarlandı!")
+                        .parseMode("Markdown")
+                        .replyMarkup(BotKeyboardHelper.getSettingsKeyboard(user.isNotificationsEnabled(), bfHour, hour))
+                        .build();
+                execute(em);
+                answerCallback(callbackQuery.getId(), "Saat kaydedildi!");
+                return;
+            }
+
+            if ("back_to_settings".equals(data)) {
+                BotUser user = botUserRepository.findById(chatId).orElseThrow();
+                int bfHour = user.getBreakfastHour() != null ? user.getBreakfastHour() : 7;
+                int dnHour = user.getDinnerHour() != null ? user.getDinnerHour() : 15;
+
+                EditMessageText em = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text("⚙️ *Kullanıcı Ayarları*\n\nBildirim saatlerinizi veya şehrinizi güncelleyebilirsiniz:")
+                        .parseMode("Markdown")
+                        .replyMarkup(BotKeyboardHelper.getSettingsKeyboard(user.isNotificationsEnabled(), bfHour, dnHour))
+                        .build();
+                execute(em);
+                answerCallback(callbackQuery.getId(), null);
+                return;
+            }
+
             if (data.startsWith("week_meal:")) {
                 LocalDate date = LocalDate.parse(data.substring(10));
                 sendDailyMeal(chatId, date, adminService.isAdmin(chatId));
+                answerCallback(callbackQuery.getId(), null);
+                return;
+            }
+
+            if (data.startsWith("rate_meal:")) {
+                String[] parts = data.split(":");
+                int score = Integer.parseInt(parts[1]);
+                LocalDate date = LocalDate.parse(parts[2]);
+                int cityId = Integer.parseInt(parts[3]);
+
+                MealRating rating = mealRatingRepository
+                        .findByUserChatIdAndDateAndMealTypeAndCityId(chatId, date, 1, cityId)
+                        .orElse(MealRating.builder()
+                                .userChatId(chatId)
+                                .date(date)
+                                .mealType(1)
+                                .cityId(cityId)
+                                .build());
+                rating.setScore(score);
+                mealRatingRepository.save(rating);
+
+                answerCallback(callbackQuery.getId(), "Puanınız kaydedildi! ⭐ " + score + "/5");
+
+                // Menüyü yeni puanla anında güncelle
+                List<Meal> meals = mealService.getMealsByDate(date).stream()
+                        .filter(m -> m.getCityId() != null && m.getCityId().equals(cityId))
+                        .toList();
+                String cityName = CityHelper.getCityName(cityId);
+                Double avgScore = mealRatingRepository.getAverageScore(date, 1, cityId);
+                long ratingCount = mealRatingRepository.countByDateAndMealTypeAndCityId(date, 1, cityId);
+                String updatedText = MenuFormatter.formatDailyMenu(date, cityName, meals, avgScore, ratingCount);
+
+                try {
+                    EditMessageText em = EditMessageText.builder()
+                            .chatId(chatId)
+                            .messageId(messageId)
+                            .text(updatedText)
+                            .parseMode("Markdown")
+                            .replyMarkup(BotKeyboardHelper.getMealActionKeyboard(date, cityId))
+                            .build();
+                    execute(em);
+                } catch (Exception ignored) {}
+                return;
+            }
+
+            if ("action:random_food".equals(data)) {
+                sendRandomFoodSuggestion(chatId, messageId);
                 answerCallback(callbackQuery.getId(), null);
                 return;
             }
@@ -483,13 +690,57 @@ public class KykMealBot extends TelegramLongPollingBot {
             mealSyncService.syncCityMenuAsync(cityId);
         }
 
-        String formatted = MenuFormatter.formatDailyMenu(date, cityName, meals);
+        Double avgScore = mealRatingRepository.getAverageScore(date, 1, cityId);
+        long ratingCount = mealRatingRepository.countByDateAndMealTypeAndCityId(date, 1, cityId);
+
+        String formatted = MenuFormatter.formatDailyMenu(date, cityName, meals, avgScore, ratingCount);
 
         SendMessage sm = SendMessage.builder()
                 .chatId(chatId)
                 .text(formatted)
                 .parseMode("Markdown")
-                .replyMarkup(BotKeyboardHelper.getMainReplyKeyboard(isAdmin))
+                .replyMarkup(BotKeyboardHelper.getMealActionKeyboard(date, cityId))
+                .build();
+        execute(sm);
+    }
+
+    private void sendRandomFoodSuggestion(Long chatId, Integer messageId) throws TelegramApiException {
+        int index = java.util.concurrent.ThreadLocalRandom.current().nextInt(RANDOM_FOOD_IDEAS.size());
+        String food = RANDOM_FOOD_IDEAS.get(index);
+
+        String text = "🎲 *BUGÜN NE YESEM? (Öğrenci Tavsiyesi)*\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                + food
+                + "\n\n━━━━━━━━━━━━━━━━━━━━━━\n💡 _Beğenmediysen butona basıp çarkı tekrar çevir!_";
+
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        InlineKeyboardButton btnReroll = new InlineKeyboardButton();
+        btnReroll.setText("🎲 Başka Bir Şey Öner");
+        btnReroll.setCallbackData("action:random_food");
+        row.add(btnReroll);
+        rows.add(row);
+        markup.setKeyboard(rows);
+
+        if (messageId != null) {
+            try {
+                EditMessageText em = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text(text)
+                        .parseMode("Markdown")
+                        .replyMarkup(markup)
+                        .build();
+                execute(em);
+                return;
+            } catch (Exception ignored) {}
+        }
+
+        SendMessage sm = SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .parseMode("Markdown")
+                .replyMarkup(markup)
                 .build();
         execute(sm);
     }
@@ -508,25 +759,31 @@ public class KykMealBot extends TelegramLongPollingBot {
         BotUser user = botUserRepository.findById(chatId).orElseThrow();
         int cityId = user.getCityId() != null ? user.getCityId() : 1;
         String cityName = CityHelper.getCityName(cityId);
+        int bfHour = user.getBreakfastHour() != null ? user.getBreakfastHour() : 7;
+        int dnHour = user.getDinnerHour() != null ? user.getDinnerHour() : 15;
 
         String text = String.format("""
                 ⚙️ *Kullanıcı Ayarları*
 
                 📍 *Mevcut Şehir:* %d - %s
                 🔔 *Günlük Bildirimler:* %s
+                🍳 *Kahvaltı Bildirimi:* %02d:00
+                🍲 *Akşam Bildirimi:* %02d:00
 
-                Aşağıdaki butonları kullanarak şehrinizi değiştirebilir veya bildirimleri açıp kapatabilirsiniz:
+                Aşağıdaki butonları kullanarak şehrinizi ve bildirim saatlerinizi kişiselleştirebilirsiniz:
                 """,
                 cityId,
                 cityName,
-                user.isNotificationsEnabled() ? "Açık ✅" : "Kapalı ❌"
+                user.isNotificationsEnabled() ? "Açık ✅" : "Kapalı ❌",
+                bfHour,
+                dnHour
         );
 
         SendMessage sm = SendMessage.builder()
                 .chatId(chatId)
                 .text(text)
                 .parseMode("Markdown")
-                .replyMarkup(BotKeyboardHelper.getSettingsKeyboard(user.isNotificationsEnabled()))
+                .replyMarkup(BotKeyboardHelper.getSettingsKeyboard(user.isNotificationsEnabled(), bfHour, dnHour))
                 .build();
         execute(sm);
     }

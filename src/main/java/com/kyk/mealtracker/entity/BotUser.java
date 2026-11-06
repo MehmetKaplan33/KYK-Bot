@@ -39,4 +39,12 @@ public class BotUser {
     @Builder.Default
     @Column(name = "city_id")
     private Integer cityId = 1;
+
+    @Builder.Default
+    @Column(name = "breakfast_hour")
+    private Integer breakfastHour = 7; // Varsayılan 07:00
+
+    @Builder.Default
+    @Column(name = "dinner_hour")
+    private Integer dinnerHour = 15; // Varsayılan 15:00
 }

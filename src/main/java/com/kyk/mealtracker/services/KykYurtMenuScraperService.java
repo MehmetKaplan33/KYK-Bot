@@ -1,6 +1,9 @@
 package com.kyk.mealtracker.services;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kyk.mealtracker.entity.Meal;
+import com.kyk.mealtracker.util.CalorieHelper;
 import com.kyk.mealtracker.util.CityHelper;
 import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
@@ -29,6 +32,8 @@ public class KykYurtMenuScraperService {
     // Kalori yakalama desenleri: "118 / 227 kcal", "348 kcal" veya JSON içindeki "totalCalories":1000
     private static final Pattern NEXT_DATA_PATTERN = Pattern.compile("item\":\\{(.*?\"totalCalories\":\\s*(\\d+).*?)\\}");
     private static final Pattern CALORIE_LABEL_PATTERN = Pattern.compile("(\\d+(?:\\s*/\\s*\\d+)?)\\s*(?:kcal|kalori)", Pattern.CASE_INSENSITIVE);
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Belirtilen şehir ve ay için aylık arşiv sayfasından tüm kahvaltı ve akşam yemeklerini çeker.
@@ -109,8 +114,9 @@ public class KykYurtMenuScraperService {
 
         try {
             Document doc = Jsoup.connect(url).userAgent(USER_AGENT).timeout(10000).get();
-            String html = doc.html();
-            return parseMealFromNextJsScript(html, date, mealType, cityId);
+            Meal meal = parseMealFromLdJson(doc, date, mealType, cityId);
+            if (meal != null) return meal;
+            return parseMealFromNextJsScript(doc.html(), date, mealType, cityId);
         } catch (Exception e) {
             logger.warn("Tekil gün detay çekilemedi: {}", e.getMessage());
             return null;
@@ -121,14 +127,58 @@ public class KykYurtMenuScraperService {
         String url = String.format("%s/%s/%s", BASE_URL, citySlug, mealSlug);
         try {
             Document doc = Jsoup.connect(url).userAgent(USER_AGENT).timeout(10000).get();
-            String html = doc.html();
-            Meal meal = parseMealFromNextJsScript(html, LocalDate.now(), mealType, cityId);
+            Meal meal = parseMealFromLdJson(doc, LocalDate.now(), mealType, cityId);
+            if (meal == null) {
+                meal = parseMealFromNextJsScript(doc.html(), LocalDate.now(), mealType, cityId);
+            }
             if (meal != null) {
                 targetList.add(meal);
             }
         } catch (Exception e) {
             logger.warn("Tekil sayfa çekilemedi ({}): {}", url, e.getMessage());
         }
+    }
+
+    private Meal parseMealFromLdJson(Document doc, LocalDate date, int mealType, int cityId) {
+        Elements scripts = doc.select("script[type=application/ld+json]");
+        for (Element s : scripts) {
+            String json = s.data();
+            if (json.contains("\"@type\":\"ItemList\"") || json.contains("\"itemListElement\"")) {
+                try {
+                    JsonNode root = objectMapper.readTree(json);
+                    JsonNode items = root.get("itemListElement");
+                    if (items != null && items.isArray() && items.size() > 0) {
+                        String f = null, fc = null, s2 = null, sc = null, t = null, tc = null, fo = null, foc = null;
+                        int totalCal = 0;
+                        for (int i = 0; i < items.size(); i++) {
+                            JsonNode item = items.get(i);
+                            String name = item.has("name") ? item.get("name").asText().trim() : "";
+                            String cal = item.has("description") ? item.get("description").asText().trim() : "";
+                            int parsedCal = CalorieHelper.getOrEstimateCalories(name, cal);
+                            totalCal += parsedCal;
+
+                            if (i == 0) { f = name; fc = String.valueOf(parsedCal); }
+                            else if (i == 1) { s2 = name; sc = String.valueOf(parsedCal); }
+                            else if (i == 2) { t = name; tc = String.valueOf(parsedCal); }
+                            else if (i == 3) { fo = name; foc = String.valueOf(parsedCal); }
+                        }
+                        return Meal.builder()
+                                .date(date)
+                                .mealType(mealType)
+                                .cityId(cityId)
+                                .first(f).firstCalories(fc)
+                                .second(s2).secondCalories(sc)
+                                .third(t).thirdCalories(tc)
+                                .fourth(fo).fourthCalories(foc)
+                                .totalCalories(String.valueOf(totalCal))
+                                .build();
+                    }
+                } catch (Exception e) {
+                    logger.warn("LD+JSON ayrıştırma hatası: {}", e.getMessage());
+                }
+            }
+        }
+        return null;
     }
 
     private Meal parseMealFromNextJsScript(String html, LocalDate fallbackDate, int mealType, int cityId) {
@@ -204,11 +254,17 @@ public class KykYurtMenuScraperService {
                 .fourth(items.size() > 3 ? items.get(3) : null)
                 .build();
 
-        // Eğer başlıkta veya öğelerde kalori varsa çek
-        Matcher matcher = CALORIE_LABEL_PATTERN.matcher(section.text());
-        if (matcher.find()) {
-            meal.setTotalCalories(matcher.group(1));
-        }
+        // Kalorileri belirle / hesapla
+        int c1 = CalorieHelper.getOrEstimateCalories(meal.getFirst(), null);
+        int c2 = CalorieHelper.getOrEstimateCalories(meal.getSecond(), null);
+        int c3 = CalorieHelper.getOrEstimateCalories(meal.getThird(), null);
+        int c4 = CalorieHelper.getOrEstimateCalories(meal.getFourth(), null);
+
+        meal.setFirstCalories(c1 > 0 ? String.valueOf(c1) : null);
+        meal.setSecondCalories(c2 > 0 ? String.valueOf(c2) : null);
+        meal.setThirdCalories(c3 > 0 ? String.valueOf(c3) : null);
+        meal.setFourthCalories(c4 > 0 ? String.valueOf(c4) : null);
+        meal.setTotalCalories(String.valueOf(c1 + c2 + c3 + c4));
 
         return meal;
     }
