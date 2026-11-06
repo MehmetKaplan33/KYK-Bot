@@ -2,6 +2,7 @@ package com.kyk.mealtracker.services;
 
 import com.kyk.mealtracker.entity.Meal;
 import com.kyk.mealtracker.repository.BotUserRepository;
+import com.kyk.mealtracker.util.CalorieHelper;
 import com.kyk.mealtracker.util.CityHelper;
 import com.kyk.mealtracker.util.MealValidator;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +33,9 @@ public class MealSyncService {
     private final KykYurtMenuScraperService kykYurtMenuScraper;
     private final YurtMenuNetScraperService yurtMenuNetScraper;
     private final BotUserRepository botUserRepository;
+
+    // Hangi (şehir, tarih) ikilisinin detay kaynaklardan çapraz doğrulandığını takip eder
+    private final Set<String> detailVerifiedDays = ConcurrentHashMap.newKeySet();
 
     /**
      * Botta kayıtlı olan ve aktif kullanıcı bulunan tüm şehirler için menüleri çeker.
@@ -48,7 +54,7 @@ public class MealSyncService {
         for (Integer cityId : activeCityIds) {
             syncCityMenu(cityId, currentMonth);
             try {
-                Thread.sleep(1200); // Siteleri yormamak için nazik bekleme
+                Thread.sleep(1000);
             } catch (InterruptedException ignored) {}
         }
         logger.info("Tüm aktif şehirlerin çoklu kaynak menü senkronizasyonu tamamlandı.");
@@ -56,11 +62,11 @@ public class MealSyncService {
 
     /**
      * Belirli bir şehir için belirtilen ayın menüsünü tüm kaynaklardan (kykyemek.com + kykyurtmenu.com + yurtmenu.net)
-     * çekip birleştirir (merge) ve DB'ye yazar.
+     * çekip yemek bazında çapraz doğrulayarak birleştirir (field-level smart merge) ve DB'ye yazar.
      */
     public int syncCityMenu(int cityId, YearMonth yearMonth) {
         String cityName = CityHelper.getCityName(cityId);
-        logger.info("Çoklu kaynak senkronizasyonu: Şehir: {} (Plaka: {}), Ay: {}", cityName, cityId, yearMonth);
+        logger.info("Çoklu kaynak çapraz senkronizasyonu: Şehir: {} (Plaka: {}), Ay: {}", cityName, cityId, yearMonth);
 
         Map<String, Meal> mergedMap = new LinkedHashMap<>();
 
@@ -68,31 +74,32 @@ public class MealSyncService {
         List<Meal> source1Meals = kykYemekComScraper.scrapeMonthlyMenu(cityId, yearMonth);
         for (Meal m : source1Meals) {
             if (MealValidator.isValidMeal(m)) {
-                mergedMap.put(mealKey(m.getDate(), m.getMealType()), m);
+                putOrMerge(mergedMap, m);
             }
         }
 
-        // 2. Kaynak: kykyurtmenu.com (81 İl Aylık Arşiv + Günlük JSON-LD)
+        // 2. Kaynak: kykyurtmenu.com (81 İl Aylık Arşiv)
         List<Meal> source2Meals = kykYurtMenuScraper.scrapeMonthlyMenu(cityId, yearMonth);
         for (Meal m : source2Meals) {
             if (MealValidator.isValidMeal(m)) {
-                String key = mealKey(m.getDate(), m.getMealType());
-                Meal existing = mergedMap.get(key);
-                if (existing == null || isRicherMeal(m, existing)) {
-                    mergedMap.put(key, m);
-                }
+                putOrMerge(mergedMap, m);
             }
         }
 
-        // 3. Kaynak (Canlı Günlük/Yarın Kurtarıcı): Bugün ve yarın için hala eksik öğün varsa yurtmenu.net ve tekil sayfaları yokla
+        // 3. Yakın günler (Bugün + 3 gün) için detay sayfaları ve yurtmenu.net üzerinden çapraz doğrulama & zenginleştirme
         LocalDate today = LocalDate.now(TURKEY_ZONE);
-        rescueSingleDateIfMissing(cityId, today, yearMonth, mergedMap);
-        rescueSingleDateIfMissing(cityId, today.plusDays(1), yearMonth, mergedMap);
+        for (int i = 0; i <= 3; i++) {
+            LocalDate d = today.plusDays(i);
+            if (YearMonth.from(d).equals(yearMonth)) {
+                crossVerifyAndEnrichDate(cityId, d, mergedMap);
+                detailVerifiedDays.add(dayVerifyKey(cityId, d));
+            }
+        }
 
         List<Meal> finalMeals = new ArrayList<>(mergedMap.values());
         if (!finalMeals.isEmpty()) {
             mealService.saveAllMeals(finalMeals);
-            logger.info("Başarıyla kaydedildi: {} için {} adet birleştirilmiş öğün (Kaynak1: {}, Kaynak2: {})",
+            logger.info("Başarıyla kaydedildi: {} için {} adet çapraz doğrulanmış öğün (Kaynak1: {}, Kaynak2: {})",
                     cityName, finalMeals.size(), source1Meals.size(), source2Meals.size());
             return finalMeals.size();
         } else {
@@ -102,103 +109,157 @@ public class MealSyncService {
     }
 
     /**
-     * Kullanıcının istediği tarih ve şehir için veritabanında eksik öğün varsa
-     * anında çoklu kaynaklardan tamamlayıp güncel listeyi döner.
+     * Kullanıcının istediği tarih ve şehir için veritabanındaki veriyi kontrol eder;
+     * eğer o gün henüz detay kaynaklarla çapraz doğrulanmadıysa veya eksik öğün varsa
+     * tüm kaynaklardan (kykyurtmenu detay JSON + yurtmenu.net) karşılaştırıp eksikleri ve kesik isimleri tamamlar.
      */
     public List<Meal> ensureMealsForDateAndCity(LocalDate date, int cityId) {
-        List<Meal> existing = mealService.getMealsByDateAndCity(date, cityId);
-        if (existing.size() >= 2) {
-            return existing;
-        }
-
-        // Eğer bu şehir için o ay veritabanında hiç kayıt yoksa önce aylık senkronizasyonu çalıştır
         YearMonth ym = YearMonth.from(date);
         List<Meal> monthMeals = mealService.getMealsByDateRangeAndCity(ym.atDay(1), ym.atEndOfMonth(), cityId);
         if (monthMeals.isEmpty()) {
             syncCityMenu(cityId, ym);
-            existing = mealService.getMealsByDateAndCity(date, cityId);
-            if (existing.size() >= 2) {
-                return existing;
-            }
         }
 
-        // Hala o günün kahvaltı veya akşam yemeği eksikse tekil gün kurtarıcıları çalıştır
-        boolean hasBreakfast = existing.stream().anyMatch(m -> m.getMealType() != null && m.getMealType() == 0);
-        boolean hasDinner = existing.stream().anyMatch(m -> m.getMealType() != null && m.getMealType() == 1);
+        List<Meal> existing = mealService.getMealsByDateAndCity(date, cityId);
+        String vKey = dayVerifyKey(cityId, date);
 
-        List<Meal> rescued = new ArrayList<>();
+        // Eğer bu gün daha önce detay kaynaklarla çapraz doğrulandıysa ve 2 öğün de tamamsa doğrudan dön
+        if (detailVerifiedDays.contains(vKey) && existing.size() >= 2) {
+            return existing;
+        }
 
-        // yurtmenu.net üzerinden o günü dene
-        List<Meal> ymNetMeals = yurtMenuNetScraper.scrapeDayMeals(cityId, date);
-        for (Meal m : ymNetMeals) {
+        Map<String, Meal> dayMap = new LinkedHashMap<>();
+        for (Meal m : existing) {
             if (MealValidator.isValidMeal(m)) {
-                rescued.add(m);
-                if (m.getMealType() == 0) hasBreakfast = true;
-                if (m.getMealType() == 1) hasDinner = true;
+                dayMap.put(mealKey(m.getDate(), m.getMealType()), m);
             }
         }
 
-        // kykyurtmenu.com tekil gün detay sayfasından dene
-        if (!hasBreakfast) {
-            Meal bf = kykYurtMenuScraper.scrapeSingleDayMeal(cityId, date, 0);
-            if (MealValidator.isValidMeal(bf)) rescued.add(bf);
-        }
-        if (!hasDinner) {
-            Meal dn = kykYurtMenuScraper.scrapeSingleDayMeal(cityId, date, 1);
-            if (MealValidator.isValidMeal(dn)) rescued.add(dn);
-        }
+        // Tüm tekil detay kaynaklardan (yurtmenu.net + kykyurtmenu.com Next.js tam JSON) çapraz doğrula ve birleştir
+        crossVerifyAndEnrichDate(cityId, date, dayMap);
+        detailVerifiedDays.add(vKey);
 
-        if (!rescued.isEmpty()) {
-            mealService.saveAllMeals(rescued);
-            existing = mealService.getMealsByDateAndCity(date, cityId);
+        List<Meal> enrichedList = new ArrayList<>(dayMap.values());
+        if (!enrichedList.isEmpty()) {
+            mealService.saveAllMeals(enrichedList);
+            return mealService.getMealsByDateAndCity(date, cityId);
         }
 
         return existing;
     }
 
-    private void rescueSingleDateIfMissing(int cityId, LocalDate date, YearMonth targetMonth, Map<String, Meal> mergedMap) {
-        if (!YearMonth.from(date).equals(targetMonth)) return;
-
-        String bfKey = mealKey(date, 0);
-        String dnKey = mealKey(date, 1);
-
-        if (!mergedMap.containsKey(bfKey) || !mergedMap.containsKey(dnKey)) {
-            List<Meal> dayMeals = yurtMenuNetScraper.scrapeDayMeals(cityId, date);
-            for (Meal m : dayMeals) {
-                if (MealValidator.isValidMeal(m)) {
-                    mergedMap.putIfAbsent(mealKey(m.getDate(), m.getMealType()), m);
-                }
+    private void crossVerifyAndEnrichDate(int cityId, LocalDate date, Map<String, Meal> targetMap) {
+        // A) yurtmenu.net üzerinden o günün kahvaltı ve akşam yemeğini çekip karşılaştır
+        List<Meal> ymNetMeals = yurtMenuNetScraper.scrapeDayMeals(cityId, date);
+        for (Meal m : ymNetMeals) {
+            if (MealValidator.isValidMeal(m)) {
+                putOrMerge(targetMap, m);
             }
         }
 
-        if (!mergedMap.containsKey(bfKey)) {
-            Meal bf = kykYurtMenuScraper.scrapeSingleDayMeal(cityId, date, 0);
-            if (MealValidator.isValidMeal(bf)) mergedMap.put(bfKey, bf);
+        // B) kykyurtmenu.com tekil gün detay sayfasındaki tam JSON ("/" ile kesilmemiş tam isimler ve gerçek kaloriler)
+        Meal detailBf = kykYurtMenuScraper.scrapeSingleDayMeal(cityId, date, 0);
+        if (MealValidator.isValidMeal(detailBf)) {
+            putOrMerge(targetMap, detailBf);
         }
 
-        if (!mergedMap.containsKey(dnKey)) {
-            Meal dn = kykYurtMenuScraper.scrapeSingleDayMeal(cityId, date, 1);
-            if (MealValidator.isValidMeal(dn)) mergedMap.put(dnKey, dn);
+        Meal detailDn = kykYurtMenuScraper.scrapeSingleDayMeal(cityId, date, 1);
+        if (MealValidator.isValidMeal(detailDn)) {
+            putOrMerge(targetMap, detailDn);
         }
+    }
+
+    private void putOrMerge(Map<String, Meal> map, Meal candidate) {
+        String key = mealKey(candidate.getDate(), candidate.getMealType());
+        Meal current = map.get(key);
+        if (current == null) {
+            map.put(key, candidate);
+        } else {
+            map.put(key, mergeTwoMeals(current, candidate));
+        }
+    }
+
+    /**
+     * İki farklı kaynaktan gelen aynı gün ve öğüne ait menüyü YEMEK BAZINDA (first, second, third, fourth)
+     * karşılaştırır; kesik kalmış ("Meyveli" gibi) veya alternatifleri eksik isimleri tam olanla tamamlar.
+     */
+    private Meal mergeTwoMeals(Meal a, Meal b) {
+        String first = pickBetterDishName(a.getFirst(), b.getFirst());
+        String second = pickBetterDishName(a.getSecond(), b.getSecond());
+        String third = pickBetterDishName(a.getThird(), b.getThird());
+        String fourth = pickBetterDishName(a.getFourth(), b.getFourth());
+
+        String fc = pickBetterCalorieStr(a.getFirstCalories(), b.getFirstCalories(), first);
+        String sc = pickBetterCalorieStr(a.getSecondCalories(), b.getSecondCalories(), second);
+        String tc = pickBetterCalorieStr(a.getThirdCalories(), b.getThirdCalories(), third);
+        String foc = pickBetterCalorieStr(a.getFourthCalories(), b.getFourthCalories(), fourth);
+
+        // Toplam kalori: Gerçek detay kalorisi varsa veya yeniden hesaplanan toplam daha doğruysa onu kullan
+        int c1 = CalorieHelper.getOrEstimateCalories(first, fc);
+        int c2 = CalorieHelper.getOrEstimateCalories(second, sc);
+        int c3 = CalorieHelper.getOrEstimateCalories(third, tc);
+        int c4 = CalorieHelper.getOrEstimateCalories(fourth, foc);
+        int sumCal = c1 + c2 + c3 + c4;
+
+        Integer totA = CalorieHelper.parseCalorieNumber(a.getTotalCalories());
+        Integer totB = CalorieHelper.parseCalorieNumber(b.getTotalCalories());
+        int finalTotal = sumCal;
+        if (b.getFirstCalories() != null && b.getFirstCalories().contains("/") && totB != null && totB > 0) {
+            finalTotal = totB;
+        } else if (a.getFirstCalories() != null && a.getFirstCalories().contains("/") && totA != null && totA > 0) {
+            finalTotal = totA;
+        }
+
+        return Meal.builder()
+                .id(a.getId() != null ? a.getId() : b.getId())
+                .date(a.getDate())
+                .mealType(a.getMealType())
+                .cityId(a.getCityId())
+                .first(first).firstCalories(fc)
+                .second(second).secondCalories(sc)
+                .third(third).thirdCalories(tc)
+                .fourth(fourth).fourthCalories(foc)
+                .totalCalories(String.valueOf(finalTotal))
+                .build();
+    }
+
+    /**
+     * İki yemek isminden hangisi daha eksiksizse (örn: "/" ile alternatif içeriyorsa veya kesik değilse) onu seçer.
+     */
+    private String pickBetterDishName(String a, String b) {
+        String cleanA = KykYurtMenuScraperService.fixTruncatedDishName(a != null ? a.trim() : "");
+        String cleanB = KykYurtMenuScraperService.fixTruncatedDishName(b != null ? b.trim() : "");
+
+        if (cleanA.isEmpty()) return cleanB.isEmpty() ? null : cleanB;
+        if (cleanB.isEmpty()) return cleanA;
+
+        boolean aHasSlash = cleanA.contains("/");
+        boolean bHasSlash = cleanB.contains("/");
+
+        // Eğer bir kaynakta "/" ile alternatif yemek de yazıyorsa (örn: "Meyveli / Çikolatalı Yaş Pasta" veya "Ezogelin / Mantar Çorba") onu tercih et
+        if (bHasSlash && !aHasSlash) return cleanB;
+        if (aHasSlash && !bHasSlash) return cleanA;
+
+        // Eğer biri diğerinin kesilmiş hali veya daha kısa haliyse uzun ve tam olanı seç
+        if (cleanB.length() > cleanA.length()) return cleanB;
+        return cleanA;
+    }
+
+    private String pickBetterCalorieStr(String calA, String calB, String dishName) {
+        if (calB != null && calB.contains("/")) return calB;
+        if (calA != null && calA.contains("/")) return calA;
+        if (calB != null && !calB.isBlank()) return calB;
+        if (calA != null && !calA.isBlank()) return calA;
+        int est = CalorieHelper.getOrEstimateCalories(dishName, null);
+        return est > 0 ? String.valueOf(est) : null;
     }
 
     private String mealKey(LocalDate date, Integer mealType) {
         return date + ":" + mealType;
     }
 
-    private boolean isRicherMeal(Meal candidate, Meal current) {
-        int candCount = countNonEmptyItems(candidate);
-        int currCount = countNonEmptyItems(current);
-        return candCount > currCount;
-    }
-
-    private int countNonEmptyItems(Meal m) {
-        int c = 0;
-        if (m.getFirst() != null && !m.getFirst().isBlank()) c++;
-        if (m.getSecond() != null && !m.getSecond().isBlank()) c++;
-        if (m.getThird() != null && !m.getThird().isBlank()) c++;
-        if (m.getFourth() != null && !m.getFourth().isBlank()) c++;
-        return c;
+    private String dayVerifyKey(int cityId, LocalDate date) {
+        return cityId + ":" + date;
     }
 
     /**

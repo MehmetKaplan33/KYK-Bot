@@ -54,14 +54,14 @@ public final class MenuFormatter {
             sb.append("\n");
         } else {
             sb.append("🍳 *KAHVALTI* `(").append(breakfastTime).append(")`\n");
-            sb.append("└ _Kahvaltı menüsü henüz girilmedi._\n\n");
+            sb.append("└ _Bu tarihin kahvaltı menüsü henüz yayınlanmadı._\n\n");
         }
 
         if (dinner != null) {
             appendMealBlock(sb, "🍲 AKŞAM YEMEĞİ", dinner, dinnerTime);
         } else {
             sb.append("🍲 *AKŞAM YEMEĞİ* `(").append(dinnerTime).append(")`\n");
-            sb.append("└ _Akşam menüsü henüz girilmedi._\n");
+            sb.append("└ _İl müdürlüğü bu tarihin akşam menüsünü henüz yayınlamadı._\n");
         }
 
         // Öğrenci Puanı Göstergesi

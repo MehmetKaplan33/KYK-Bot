@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,10 +29,17 @@ public class KykYurtMenuScraperService {
     private static final Logger logger = LoggerFactory.getLogger(KykYurtMenuScraperService.class);
     private static final String BASE_URL = "https://www.kykyurtmenu.com";
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 KykMealBot/2.0";
+    private static final Locale TR_LOCALE = Locale.forLanguageTag("tr-TR");
 
-    // Kalori yakalama desenleri: "118 / 227 kcal", "348 kcal" veya JSON içindeki "totalCalories":1000
-    private static final Pattern NEXT_DATA_PATTERN = Pattern.compile("item\":\\{(.*?\"totalCalories\":\\s*(\\d+).*?)\\}");
-    private static final Pattern CALORIE_LABEL_PATTERN = Pattern.compile("(\\d+(?:\\s*/\\s*\\d+)?)\\s*(?:kcal|kalori)", Pattern.CASE_INSENSITIVE);
+    // Next.js RSC script içindeki tam öğün verisi (slash ile ayrılmış tam yemek isimleri ve gerçek kaloriler burada bulunur)
+    private static final Pattern NEXT_ITEM_PATTERN = Pattern.compile(
+            "\\\\\"date\\\\\":\\\\\"(\\d{4}-\\d{2}-\\d{2})\\\\\",\\\\\"mealType\\\\\":(\\d+),\\\\\"cityId\\\\\":(\\d+)," +
+            "\\\\\"first\\\\\":\\\\\"(.*?)\\\\\",\\\\\"firstCalories\\\\\":\\\\\"(.*?)\\\\\"," +
+            "\\\\\"second\\\\\":\\\\\"(.*?)\\\\\",\\\\\"secondCalories\\\\\":\\\\\"(.*?)\\\\\"," +
+            "\\\\\"third\\\\\":\\\\\"(.*?)\\\\\",\\\\\"thirdCalories\\\\\":\\\\\"(.*?)\\\\\"," +
+            "\\\\\"fourth\\\\\":\\\\\"(.*?)\\\\\",\\\\\"fourthCalories\\\\\":\\\\\"(.*?)\\\\\"," +
+            "\\\\\"totalCalories\\\\\":(\\d+)"
+    );
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -47,7 +55,7 @@ public class KykYurtMenuScraperService {
         String url = String.format("%s/%s/arsiv/%s-%d", BASE_URL, cityInfo.slug(), monthSlug, yearMonth.getYear());
 
         List<Meal> meals = new ArrayList<>();
-        logger.info("Aylık menü çekiliyor: Şehir={}, URL={}", cityInfo.name(), url);
+        logger.info("[kykyurtmenu.com] Aylık menü çekiliyor: Şehir={}, URL={}", cityInfo.name(), url);
 
         try {
             Document doc = Jsoup.connect(url)
@@ -56,7 +64,7 @@ public class KykYurtMenuScraperService {
                     .get();
 
             Elements dateLinks = doc.select("a[href*=?date=]");
-            logger.info("Bulunan gün bağlantısı adedi: {}", dateLinks.size());
+            logger.info("[kykyurtmenu.com] Bulunan gün bağlantısı adedi: {}", dateLinks.size());
 
             for (Element dateLink : dateLinks) {
                 String href = dateLink.attr("href");
@@ -81,15 +89,15 @@ public class KykYurtMenuScraperService {
                 }
             }
 
-            logger.info("Arşivden çekilen toplam öğün: {} (Şehir: {})", meals.size(), cityInfo.name());
+            logger.info("[kykyurtmenu.com] Arşivden çekilen toplam öğün: {} (Şehir: {})", meals.size(), cityInfo.name());
 
         } catch (Exception e) {
-            logger.error("Aylık menü çekme hatası (URL: {}): {}", url, e.getMessage());
+            logger.error("[kykyurtmenu.com] Aylık menü çekme hatası (URL: {}): {}", url, e.getMessage());
         }
 
-        // Eğer arşivden hiç çekilemediyse veya güncel detay sayfası denenmek istenirse
+        // Eğer arşivden hiç çekilemediyse güncel detay sayfası dene
         if (meals.isEmpty()) {
-            logger.info("Arşiv boş veya erişilemedi, güncel detay sayfasından çekim deneniyor...");
+            logger.info("[kykyurtmenu.com] Arşiv boş veya erişilemedi, güncel detay sayfasından çekim deneniyor...");
             scrapeDailyDetailedMeals(cityInfo, meals);
         }
 
@@ -98,108 +106,75 @@ public class KykYurtMenuScraperService {
 
     /**
      * Sitenin ana şehir sayfasındaki (Next.js JSON payload) zengin kalori verilerini çeker.
-     * URL: https://www.kykyurtmenu.com/adana ve /adana/kahvalti
      */
     public void scrapeDailyDetailedMeals(CityHelper.CityInfo cityInfo, List<Meal> targetList) {
-        scrapeSinglePageJson(cityInfo.slug(), "aksam", 1, cityInfo.plateCode(), targetList);
-        scrapeSinglePageJson(cityInfo.slug(), "kahvalti", 0, cityInfo.plateCode(), targetList);
+        LocalDate today = LocalDate.now();
+        Meal dinner = scrapeSingleDayMeal(cityInfo.plateCode(), today, 1);
+        if (dinner != null) targetList.add(dinner);
+        Meal breakfast = scrapeSingleDayMeal(cityInfo.plateCode(), today, 0);
+        if (breakfast != null) targetList.add(breakfast);
     }
 
+    /**
+     * Belirtilen gün ve öğün için detay sayfasından TAM (kesilmemiş, "/" alternatifli ve gerçek kalorili) menüyü çeker.
+     * ÖNEMLİ: Önce Next.js RSC script içindeki tam JSON'a bakar (çünkü LD+JSON ItemList "/" karakterinden sonrasını kesmektedir).
+     */
     public Meal scrapeSingleDayMeal(int cityId, LocalDate date, int mealType) {
         CityHelper.CityInfo cityInfo = CityHelper.getByPlate(cityId).orElse(null);
-        if (cityInfo == null) return null;
+        if (cityInfo == null || date == null) return null;
 
         String mealSlug = mealType == 0 ? "kahvalti" : "aksam";
         String url = String.format("%s/%s/%s?date=%s", BASE_URL, cityInfo.slug(), mealSlug, date);
 
         try {
             Document doc = Jsoup.connect(url).userAgent(USER_AGENT).timeout(10000).get();
-            Meal meal = parseMealFromLdJson(doc, date, mealType, cityId);
-            if (meal != null) return meal;
-            return parseMealFromNextJsScript(doc.html(), date, mealType, cityId);
-        } catch (Exception e) {
-            logger.warn("Tekil gün detay çekilemedi: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private void scrapeSinglePageJson(String citySlug, String mealSlug, int mealType, int cityId, List<Meal> targetList) {
-        String url = String.format("%s/%s/%s", BASE_URL, citySlug, mealSlug);
-        try {
-            Document doc = Jsoup.connect(url).userAgent(USER_AGENT).timeout(10000).get();
-            Meal meal = parseMealFromLdJson(doc, LocalDate.now(), mealType, cityId);
-            if (meal == null) {
-                meal = parseMealFromNextJsScript(doc.html(), LocalDate.now(), mealType, cityId);
-            }
-            if (meal != null) {
-                targetList.add(meal);
+            // 1. Öncelik: Next.js script içindeki tam ve kesilmemiş veri (tarih doğrulamasıyla birlikte!)
+            Meal nextJsMeal = parseMealFromNextJsScript(doc.html(), date, mealType, cityId);
+            if (nextJsMeal != null) {
+                return nextJsMeal;
             }
         } catch (Exception e) {
-            logger.warn("Tekil sayfa çekilemedi ({}): {}", url, e.getMessage());
-        }
-    }
-
-    private Meal parseMealFromLdJson(Document doc, LocalDate date, int mealType, int cityId) {
-        Elements scripts = doc.select("script[type=application/ld+json]");
-        for (Element s : scripts) {
-            String json = s.data();
-            if (json.contains("\"@type\":\"ItemList\"") || json.contains("\"itemListElement\"")) {
-                try {
-                    JsonNode root = objectMapper.readTree(json);
-                    JsonNode items = root.get("itemListElement");
-                    if (items != null && items.isArray() && items.size() > 0) {
-                        String f = null, fc = null, s2 = null, sc = null, t = null, tc = null, fo = null, foc = null;
-                        int totalCal = 0;
-                        for (int i = 0; i < items.size(); i++) {
-                            JsonNode item = items.get(i);
-                            String name = item.has("name") ? item.get("name").asText().trim() : "";
-                            String cal = item.has("description") ? item.get("description").asText().trim() : "";
-                            int parsedCal = CalorieHelper.getOrEstimateCalories(name, cal);
-                            totalCal += parsedCal;
-
-                            if (i == 0) { f = name; fc = String.valueOf(parsedCal); }
-                            else if (i == 1) { s2 = name; sc = String.valueOf(parsedCal); }
-                            else if (i == 2) { t = name; tc = String.valueOf(parsedCal); }
-                            else if (i == 3) { fo = name; foc = String.valueOf(parsedCal); }
-                        }
-                        return Meal.builder()
-                                .date(date)
-                                .mealType(mealType)
-                                .cityId(cityId)
-                                .first(f).firstCalories(fc)
-                                .second(s2).secondCalories(sc)
-                                .third(t).thirdCalories(tc)
-                                .fourth(fo).fourthCalories(foc)
-                                .totalCalories(String.valueOf(totalCal))
-                                .build();
-                    }
-                } catch (Exception e) {
-                    logger.warn("LD+JSON ayrıştırma hatası: {}", e.getMessage());
-                }
-            }
+            logger.warn("[kykyurtmenu.com] Tekil gün detay çekilemedi ({}): {}", url, e.getMessage());
         }
         return null;
     }
 
-    private Meal parseMealFromNextJsScript(String html, LocalDate fallbackDate, int mealType, int cityId) {
-        // Next.js script içinde: \"first\":\"...\",\"firstCalories\":\"118 / 227\",...,\"totalCalories\":1000
-        Pattern p = Pattern.compile("\\\\\"first\\\\\":\\\\\"(.*?)\\\\\".*?\\\\\"firstCalories\\\\\":\\\\\"(.*?)\\\\\".*?\\\\\"second\\\\\":\\\\\"(.*?)\\\\\".*?\\\\\"secondCalories\\\\\":\\\\\"(.*?)\\\\\".*?\\\\\"third\\\\\":\\\\\"(.*?)\\\\\".*?\\\\\"thirdCalories\\\\\":\\\\\"(.*?)\\\\\".*?\\\\\"fourth\\\\\":\\\\\"(.*?)\\\\\".*?\\\\\"fourthCalories\\\\\":\\\\\"(.*?)\\\\\".*?\\\\\"totalCalories\\\\\":(\\d+)");
-        Matcher m = p.matcher(html);
-        if (m.find()) {
-            return Meal.builder()
-                    .date(fallbackDate)
-                    .mealType(mealType)
-                    .cityId(cityId)
-                    .first(unescapeJson(m.group(1)))
-                    .firstCalories(unescapeJson(m.group(2)))
-                    .second(unescapeJson(m.group(3)))
-                    .secondCalories(unescapeJson(m.group(4)))
-                    .third(unescapeJson(m.group(5)))
-                    .thirdCalories(unescapeJson(m.group(6)))
-                    .fourth(unescapeJson(m.group(7)))
-                    .fourthCalories(unescapeJson(m.group(8)))
-                    .totalCalories(m.group(9))
-                    .build();
+    private Meal parseMealFromNextJsScript(String html, LocalDate expectedDate, int mealType, int cityId) {
+        Matcher m = NEXT_ITEM_PATTERN.matcher(html);
+        while (m.find()) {
+            try {
+                LocalDate parsedDate = LocalDate.parse(m.group(1));
+                int parsedMealType = Integer.parseInt(m.group(2));
+
+                // Sitede o gün veri yoksa 2026-11-01'e (ayın ilk gününe) fallback yapıyor; tarih eşleşmiyorsa reddet!
+                if (expectedDate != null && !parsedDate.equals(expectedDate)) {
+                    continue;
+                }
+                if (parsedMealType != mealType) {
+                    continue;
+                }
+
+                String f = fixTruncatedDishName(unescapeJson(m.group(4)));
+                String fc = unescapeJson(m.group(5));
+                String s = fixTruncatedDishName(unescapeJson(m.group(6)));
+                String sc = unescapeJson(m.group(7));
+                String t = fixTruncatedDishName(unescapeJson(m.group(8)));
+                String tc = unescapeJson(m.group(9));
+                String fo = fixTruncatedDishName(unescapeJson(m.group(10)));
+                String foc = unescapeJson(m.group(11));
+                String totalCal = m.group(12);
+
+                return Meal.builder()
+                        .date(parsedDate)
+                        .mealType(mealType)
+                        .cityId(cityId)
+                        .first(f).firstCalories(fc)
+                        .second(s).secondCalories(sc)
+                        .third(t).thirdCalories(tc)
+                        .fourth(fo).fourthCalories(foc)
+                        .totalCalories(totalCal)
+                        .build();
+            } catch (Exception ignored) {}
         }
         return null;
     }
@@ -207,6 +182,28 @@ public class KykYurtMenuScraperService {
     private String unescapeJson(String input) {
         if (input == null) return null;
         return input.replace("\\/", "/").replace("\\\"", "\"").trim();
+    }
+
+    /**
+     * Arşiv sayfasında "/" karakterinden bölündüğü için tek kelimede yarım kalan yemek isimlerini tamamlar.
+     * Örn: "Meyveli" -> "Meyveli / Çikolatalı Yaş Pasta", "Zeytinli" -> "Zeytinli / Peynirli Açma", "Peynirli" -> "Peynirli / Ispanaklı Börek"
+     */
+    public static String fixTruncatedDishName(String name) {
+        if (name == null || name.isBlank()) return name;
+        String trimmed = name.trim();
+        String lower = trimmed.toLowerCase(TR_LOCALE);
+
+        return switch (lower) {
+            case "meyveli" -> "Meyveli / Çikolatalı Yaş Pasta";
+            case "çikolatalı" -> "Çikolatalı / Meyveli Yaş Pasta";
+            case "zeytinli" -> "Zeytinli / Peynirli Açma";
+            case "peynirli" -> "Peynirli / Ispanaklı Börek";
+            case "kaşarlı" -> "Kaşarlı / Peynirli Börek";
+            case "patatesli" -> "Patatesli / Peynirli Börek";
+            case "ıspanaklı" -> "Ispanaklı / Peynirli Börek";
+            case "kıymalı" -> "Kıymalı / Peynirli Börek";
+            default -> trimmed;
+        };
     }
 
     private Element findParentCard(Element element) {
@@ -222,10 +219,9 @@ public class KykYurtMenuScraperService {
     }
 
     private Element findMealSection(Element card, String keyword) {
-        java.util.Locale tr = java.util.Locale.forLanguageTag("tr-TR");
         for (Element div : card.select("div")) {
             Element p = div.selectFirst("> p");
-            if (p != null && p.text().toLowerCase(tr).contains(keyword.toLowerCase(tr))) {
+            if (p != null && p.text().toLowerCase(TR_LOCALE).contains(keyword.toLowerCase(TR_LOCALE))) {
                 return div;
             }
         }
@@ -239,7 +235,7 @@ public class KykYurtMenuScraperService {
         for (Element li : listItems) {
             String text = li.text().trim();
             if (!text.isEmpty() && !text.equalsIgnoreCase("Veri yok")) {
-                items.add(text);
+                items.add(fixTruncatedDishName(text));
             }
         }
 
