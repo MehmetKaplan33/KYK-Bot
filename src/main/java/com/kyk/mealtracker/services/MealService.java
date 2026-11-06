@@ -62,6 +62,14 @@ public class MealService {
         return mealRepository.findByDate(date);
     }
 
+    public List<Meal> getMealsByDateAndCity(LocalDate date, Integer cityId) {
+        return mealRepository.findByDateAndCityId(date, cityId);
+    }
+
+    public List<Meal> getMealsByDateRangeAndCity(LocalDate startDate, LocalDate endDate, Integer cityId) {
+        return mealRepository.findByDateBetweenAndCityId(startDate, endDate, cityId);
+    }
+
     public List<Meal> getMealsByDateAndType(LocalDate date, Integer mealType) {
         return mealRepository.findByDateAndMealType(date, mealType);
     }

@@ -66,13 +66,30 @@ public final class BotKeyboardHelper {
     }
 
     /**
-     * Günün yemeği için Puanlama ve Alternatif Butonları
+     * Günün yemeği için Gün Gezintisi (Önceki/Sonraki Gün), Puanlama ve Alternatif Butonları
      */
     public static InlineKeyboardMarkup getMealActionKeyboard(LocalDate date, int cityId) {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        DateTimeFormatter shortFmt = DateTimeFormatter.ofPattern("d MMM", new Locale("tr", "TR"));
 
-        // Reaksiyon / Puanlama Satırı
+        // 0. Satır: Tüm Ay Boyunca Gün Gezintisi (Önceki / Sonraki Gün)
+        LocalDate prevDate = date.minusDays(1);
+        LocalDate nextDate = date.plusDays(1);
+        List<InlineKeyboardButton> navRow = new ArrayList<>();
+
+        InlineKeyboardButton btnPrev = new InlineKeyboardButton();
+        btnPrev.setText("◀️ " + prevDate.format(shortFmt));
+        btnPrev.setCallbackData("nav_day:" + prevDate);
+        navRow.add(btnPrev);
+
+        InlineKeyboardButton btnNext = new InlineKeyboardButton();
+        btnNext.setText(nextDate.format(shortFmt) + " ▶️");
+        btnNext.setCallbackData("nav_day:" + nextDate);
+        navRow.add(btnNext);
+        rows.add(navRow);
+
+        // 1. Satır: Reaksiyon / Puanlama Satırı
         List<InlineKeyboardButton> r1 = new ArrayList<>();
         InlineKeyboardButton btnGood = new InlineKeyboardButton();
         btnGood.setText("😋 Çok İyi");

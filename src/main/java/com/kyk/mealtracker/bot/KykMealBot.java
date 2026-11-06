@@ -469,6 +469,31 @@ public class KykMealBot extends TelegramLongPollingBot {
                 return;
             }
 
+            if (data.startsWith("nav_day:")) {
+                LocalDate date = LocalDate.parse(data.substring(8));
+                BotUser user = botUserRepository.findById(chatId).orElseThrow();
+                int cityId = user.getCityId() != null ? user.getCityId() : 1;
+                String cityName = CityHelper.getCityName(cityId);
+
+                List<Meal> meals = mealSyncService.ensureMealsForDateAndCity(date, cityId);
+                Double avgScore = mealRatingRepository.getAverageScore(date, 1, cityId);
+                long ratingCount = mealRatingRepository.countByDateAndMealTypeAndCityId(date, 1, cityId);
+                String updatedText = MenuFormatter.formatDailyMenu(date, cityName, meals, avgScore, ratingCount);
+
+                try {
+                    EditMessageText em = EditMessageText.builder()
+                            .chatId(chatId)
+                            .messageId(messageId)
+                            .text(updatedText)
+                            .parseMode("Markdown")
+                            .replyMarkup(BotKeyboardHelper.getMealActionKeyboard(date, cityId))
+                            .build();
+                    execute(em);
+                } catch (Exception ignored) {}
+                answerCallback(callbackQuery.getId(), null);
+                return;
+            }
+
             if (data.startsWith("rate_meal:")) {
                 String[] parts = data.split(":");
                 int score = Integer.parseInt(parts[1]);
@@ -682,13 +707,7 @@ public class KykMealBot extends TelegramLongPollingBot {
         int cityId = user.getCityId() != null ? user.getCityId() : 1;
         String cityName = CityHelper.getCityName(cityId);
 
-        List<Meal> meals = mealService.getMealsByDate(date).stream()
-                .filter(m -> m.getCityId() != null && m.getCityId().equals(cityId))
-                .toList();
-
-        if (meals.isEmpty()) {
-            mealSyncService.syncCityMenuAsync(cityId);
-        }
+        List<Meal> meals = mealSyncService.ensureMealsForDateAndCity(date, cityId);
 
         Double avgScore = mealRatingRepository.getAverageScore(date, 1, cityId);
         long ratingCount = mealRatingRepository.countByDateAndMealTypeAndCityId(date, 1, cityId);

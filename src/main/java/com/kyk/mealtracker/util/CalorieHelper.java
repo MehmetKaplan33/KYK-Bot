@@ -123,10 +123,13 @@ public final class CalorieHelper {
     public static Integer parseCalorieNumber(String calStr) {
         if (calStr == null || calStr.isBlank()) return null;
         try {
-            // "118 / 227 kcal" veya "348 kcal" -> ilk sayıyı al
-            String clean = calStr.replaceAll("[^0-9/]", "").trim();
+            // "118 / 227 kcal", "650-850 kcal" veya "348 kcal" -> ilk sayıyı al
+            String clean = calStr.replaceAll("[^0-9/\\-]", "").trim();
             if (clean.contains("/")) {
                 clean = clean.split("/")[0].trim();
+            }
+            if (clean.contains("-")) {
+                clean = clean.split("-")[0].trim();
             }
             if (!clean.isEmpty()) {
                 return Integer.parseInt(clean);

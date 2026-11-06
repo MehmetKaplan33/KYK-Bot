@@ -222,9 +222,10 @@ public class KykYurtMenuScraperService {
     }
 
     private Element findMealSection(Element card, String keyword) {
+        java.util.Locale tr = java.util.Locale.forLanguageTag("tr-TR");
         for (Element div : card.select("div")) {
-            Element p = div.selectFirst("p");
-            if (p != null && p.text().toLowerCase().contains(keyword.toLowerCase())) {
+            Element p = div.selectFirst("> p");
+            if (p != null && p.text().toLowerCase(tr).contains(keyword.toLowerCase(tr))) {
                 return div;
             }
         }

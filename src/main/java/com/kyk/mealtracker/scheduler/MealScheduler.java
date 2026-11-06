@@ -83,6 +83,13 @@ public class MealScheduler {
                     .filter(MealValidator::isValidMeal)
                     .toList();
 
+            if (meals.isEmpty()) {
+                meals = mealSyncService.ensureMealsForDateAndCity(today, cityId).stream()
+                        .filter(m -> m.getMealType() != null && m.getMealType().equals(mealType))
+                        .filter(MealValidator::isValidMeal)
+                        .toList();
+            }
+
             if (meals.isEmpty()) continue;
 
             Meal meal = meals.get(0);
