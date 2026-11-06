@@ -1,33 +1,37 @@
 package com.kyk.mealtracker.controller;
 
-import com.kyk.mealtracker.entity.Meal;
-import com.kyk.mealtracker.services.MealService;
+import com.kyk.mealtracker.services.MealSyncService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
 public class MealController {
 
-    private final com.kyk.mealtracker.services.MealSyncService mealSyncService;
+    private final MealSyncService mealSyncService;
 
-    @GetMapping("/fetchMeals")
-    public ResponseEntity<String> fetchMeals() {
+    @Value("${admin.secret.token:kyk_admin_secret_token_123}")
+    private String adminSecretToken;
+
+    /**
+     * Güvenli senkronizasyon endpoint'i: Artık şifresiz ve açık değil, admin token gerektirir.
+     */
+    @GetMapping("/api/admin/fetch-meals")
+    public ResponseEntity<String> fetchMeals(@RequestParam(value = "token", required = false) String token) {
+        if (token == null || !token.equals(adminSecretToken)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Yetkisiz erişim.");
+        }
+
         try {
             mealSyncService.fetchMealsForAllActiveCities();
-            return ResponseEntity.ok("Yemekler başarıyla çekildi ve kaydedildi!");
-
+            return ResponseEntity.ok("Yemekler başarıyla senkronize edildi.");
         } catch (Exception e) {
-            e.printStackTrace(); // Hata detayını görmek için
-            return ResponseEntity.internalServerError()
-                    .body("Veri çekme işlemi sırasında bir hata oluştu: " + e.getMessage());
+            return ResponseEntity.internalServerError().body("Hata: " + e.getMessage());
         }
     }
 }

@@ -29,12 +29,14 @@ public class BotUser {
     @Column(name = "last_name")
     private String lastName;
 
+    @Builder.Default
     @Column(name = "is_admin", nullable = false)
-    private Boolean isAdmin = false; // Varsayılan değer false
+    private Boolean isAdmin = false;
 
     @Column(name = "last_activity_date")
     private LocalDateTime lastActivityDate;
 
+    @Builder.Default
     @Column(name = "city_id")
-    private Integer cityId;
+    private Integer cityId = 1;
 }

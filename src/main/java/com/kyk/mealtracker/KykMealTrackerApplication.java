@@ -21,11 +21,6 @@ public class KykMealTrackerApplication {
     }
 
     @Bean
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
-    }
-
-    @Bean
     public TelegramBotsApi telegramBotsApi(KykMealBot kykMealBot) throws TelegramApiException {
         TelegramBotsApi api = new TelegramBotsApi(DefaultBotSession.class);
         api.registerBot(kykMealBot);

@@ -18,6 +18,16 @@ public class AdminService {
     private final BotUserRepository botUserRepository;
 
     public boolean isAdmin(Long chatId) {
+        // Eğer veritabanında henüz hiç admin yoksa, bota ilk yazan kişi otomatik olarak admin sayılır
+        long adminCount = botUserRepository.countByIsAdminTrue();
+        if (adminCount == 0) {
+            botUserRepository.findById(chatId).ifPresent(u -> {
+                u.setIsAdmin(true);
+                botUserRepository.save(u);
+            });
+            return true;
+        }
+
         return botUserRepository.findById(chatId)
                 .map(user -> user.getIsAdmin() != null && user.getIsAdmin())
                 .orElse(false);
