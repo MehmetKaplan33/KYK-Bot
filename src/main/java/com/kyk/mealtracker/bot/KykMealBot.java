@@ -62,8 +62,8 @@ public class KykMealBot extends TelegramLongPollingBot {
 
     private final ConcurrentHashMap<Long, Long> lastMessageTimes = new ConcurrentHashMap<>();
 
-    // Admin Duyuru Sihirbazı Durum Yönetimi (ChatId -> State)
-    private enum AdminState { NONE, WAITING_TEXT_BROADCAST, WAITING_IMG_BROADCAST }
+    // Admin Duyuru & Yönetim Sihirbazı Durum Yönetimi (ChatId -> State)
+    private enum AdminState { NONE, WAITING_TEXT_BROADCAST, WAITING_IMG_BROADCAST, WAITING_ADD_ADMIN }
     private final ConcurrentHashMap<Long, AdminState> adminStates = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, String> pendingBroadcastText = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, String> pendingBroadcastImageFileId = new ConcurrentHashMap<>();
@@ -131,7 +131,45 @@ public class KykMealBot extends TelegramLongPollingBot {
 
             if (messageText == null) return;
 
-            if (messageText.startsWith("/admin") || messageText.equals(BotKeyboardHelper.BTN_ADMIN)) {
+            if (messageText.startsWith("/admin_ekle")) {
+                if (!isAdmin) {
+                    sendPlainMessage(chatId, "🚫 Bu komutu kullanma yetkiniz bulunmuyor.");
+                    return;
+                }
+                String[] parts = messageText.trim().split("\\s+", 2);
+                if (parts.length < 2) {
+                    sendPlainMessage(chatId, "ℹ️ Kullanım: `/admin_ekle <ChatID veya @kullaniciadi>`");
+                    return;
+                }
+                processGrantAdmin(chatId, parts[1].trim());
+                return;
+            }
+
+            if (messageText.startsWith("/admin_cikar")) {
+                if (!isAdmin) {
+                    sendPlainMessage(chatId, "🚫 Bu komutu kullanma yetkiniz bulunmuyor.");
+                    return;
+                }
+                String[] parts = messageText.trim().split("\\s+", 2);
+                if (parts.length < 2) {
+                    sendPlainMessage(chatId, "ℹ️ Kullanım: `/admin_cikar <ChatID>`");
+                    return;
+                }
+                try {
+                    Long targetId = Long.parseLong(parts[1].trim());
+                    var revoked = adminService.revokeAdmin(targetId, chatId);
+                    if (revoked.isPresent()) {
+                        sendPlainMessage(chatId, "✅ `" + targetId + "` ID'li kullanıcının admin yetkisi kaldırıldı.");
+                    } else {
+                        sendPlainMessage(chatId, "⚠️ Kullanıcı bulunamadı veya kendi yetkinizi kaldırmaya çalıştınız.");
+                    }
+                } catch (NumberFormatException e) {
+                    sendPlainMessage(chatId, "❌ Geçerli bir sayısal Chat ID girin.");
+                }
+                return;
+            }
+
+            if (messageText.equals("/admin") || messageText.equals(BotKeyboardHelper.BTN_ADMIN)) {
                 if (!isAdmin) {
                     sendPlainMessage(chatId, "🚫 Bu komutu kullanma yetkiniz bulunmuyor.");
                     return;
@@ -202,7 +240,45 @@ public class KykMealBot extends TelegramLongPollingBot {
             return true;
         }
 
+        if (state == AdminState.WAITING_ADD_ADMIN) {
+            if (text == null || text.isBlank()) {
+                sendPlainMessage(chatId, "⚠️ Lütfen eklenecek kişinin Chat ID'sini veya `@kullaniciadi` bilgisini yazın (İptal: `/iptal`).");
+                return true;
+            }
+            adminStates.remove(chatId);
+            processGrantAdmin(chatId, text.trim());
+            return true;
+        }
+
         return false;
+    }
+
+    private void processGrantAdmin(Long requesterChatId, String identifier) throws TelegramApiException {
+        var grantedOpt = adminService.grantAdmin(identifier);
+        if (grantedOpt.isPresent()) {
+            BotUser newAdmin = grantedOpt.get();
+            String name = (newAdmin.getFirstName() != null ? newAdmin.getFirstName() : "Kullanıcı");
+            sendPlainMessage(requesterChatId, "✅ *" + name + "* (`" + newAdmin.getChatId() + "`) başarıyla **Yönetici (Admin)** yapıldı!");
+            try {
+                SendMessage notifyMsg = SendMessage.builder()
+                        .chatId(newAdmin.getChatId())
+                        .text("👑 *Tebrikler!* Bot yöneticisi tarafından size **Admin** yetkisi verildi.\nArtık alt menüdeki `🔧 Yönetici Paneli` butonunu veya `/admin` komutunu kullanabilirsiniz.")
+                        .parseMode("Markdown")
+                        .replyMarkup(BotKeyboardHelper.getMainReplyKeyboard(true))
+                        .build();
+                execute(notifyMsg);
+            } catch (Exception ignored) {}
+        } else {
+            sendPlainMessage(requesterChatId, "❌ `" + identifier + "` ile eşleşen kayıtlı bir kullanıcı bulunamadı.\n\n💡 _Not: Admin yapacağınız kişinin bota en az 1 kez `/start` yazmış olması gerekir. Kullanıcı Listesi menüsünden kişinin Chat ID'sini kopyalayabilirsiniz._");
+        }
+
+        SendMessage sm = SendMessage.builder()
+                .chatId(requesterChatId)
+                .text(adminService.formatAdminList(requesterChatId))
+                .parseMode("Markdown")
+                .replyMarkup(AdminKeyboardHelper.getAdminManagementKeyboard(adminService.getAllAdmins(), requesterChatId))
+                .build();
+        execute(sm);
     }
 
     private void handleUserMessage(Long chatId, String text, Message message, boolean isAdmin) throws TelegramApiException {
@@ -564,27 +640,32 @@ public class KykMealBot extends TelegramLongPollingBot {
 
         if ("stats".equals(action)) {
             String stats = adminService.getBotStats();
-            EditMessageText em = EditMessageText.builder()
-                    .chatId(chatId)
-                    .messageId(messageId)
-                    .text(stats)
-                    .parseMode("Markdown")
-                    .replyMarkup(AdminKeyboardHelper.getAdminDashboardKeyboard())
-                    .build();
-            execute(em);
+            try {
+                EditMessageText em = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text(stats)
+                        .parseMode("Markdown")
+                        .replyMarkup(AdminKeyboardHelper.getAdminDashboardKeyboard())
+                        .build();
+                execute(em);
+            } catch (Exception ignored) {}
             return;
         }
 
         if (action.startsWith("users:")) {
             int page = Integer.parseInt(action.substring(6));
             String userList = adminService.getUserList(page);
-            EditMessageText em = EditMessageText.builder()
-                    .chatId(chatId)
-                    .messageId(messageId)
-                    .text(userList)
-                    .replyMarkup(AdminKeyboardHelper.getUserListNavKeyboard(page, 10))
-                    .build();
-            execute(em);
+            int totalPages = adminService.getTotalUserPages();
+            try {
+                EditMessageText em = EditMessageText.builder()
+                        .chatId(chatId)
+                        .messageId(messageId)
+                        .text(userList)
+                        .replyMarkup(AdminKeyboardHelper.getUserListNavKeyboard(page, totalPages))
+                        .build();
+                execute(em);
+            } catch (Exception ignored) {}
             return;
         }
 
@@ -649,6 +730,51 @@ public class KykMealBot extends TelegramLongPollingBot {
             pendingBroadcastText.remove(chatId);
             pendingBroadcastImageFileId.remove(chatId);
             sendPlainMessage(chatId, "❌ Duyuru iptal edildi.");
+            return;
+        }
+
+        // Admin Yönetimi (Listele / Ekle / Çıkar)
+        if ("manage_admins".equals(action)) {
+            EditMessageText em = EditMessageText.builder()
+                    .chatId(chatId)
+                    .messageId(messageId)
+                    .text(adminService.formatAdminList(chatId))
+                    .parseMode("Markdown")
+                    .replyMarkup(AdminKeyboardHelper.getAdminManagementKeyboard(adminService.getAllAdmins(), chatId))
+                    .build();
+            execute(em);
+            return;
+        }
+
+        if ("prompt_add_admin".equals(action)) {
+            adminStates.put(chatId, AdminState.WAITING_ADD_ADMIN);
+            sendPlainMessage(chatId, "👑 *Yeni Admin Ekleme*\n\nLütfen yönetici yapmak istediğiniz kullanıcının **Chat ID** numarasını (Örn: `123456789`) veya **Telegram kullanıcı adını** (Örn: `@kullaniciadi`) yazıp gönderin.\n\n_İptal etmek için:_ `/iptal`");
+            return;
+        }
+
+        if (action.startsWith("remove_admin:")) {
+            Long targetChatId = Long.parseLong(action.substring(13));
+            var revokedOpt = adminService.revokeAdmin(targetChatId, chatId);
+            if (revokedOpt.isPresent()) {
+                BotUser removed = revokedOpt.get();
+                try {
+                    SendMessage notifyRemoved = SendMessage.builder()
+                            .chatId(removed.getChatId())
+                            .text("ℹ️ Yönetici yetkiniz sonlandırılmıştır.")
+                            .replyMarkup(BotKeyboardHelper.getMainReplyKeyboard(false))
+                            .build();
+                    execute(notifyRemoved);
+                } catch (Exception ignored) {}
+            }
+
+            EditMessageText em = EditMessageText.builder()
+                    .chatId(chatId)
+                    .messageId(messageId)
+                    .text(adminService.formatAdminList(chatId))
+                    .parseMode("Markdown")
+                    .replyMarkup(AdminKeyboardHelper.getAdminManagementKeyboard(adminService.getAllAdmins(), chatId))
+                    .build();
+            execute(em);
         }
     }
 
@@ -934,6 +1060,10 @@ public class KykMealBot extends TelegramLongPollingBot {
             botUser.setFirstName(user.getFirstName());
             botUser.setLastName(user.getLastName());
             botUser.setLastActivityDate(LocalDateTime.now());
+            if (botUser.getCityId() == null) botUser.setCityId(1);
+            if (botUser.getBreakfastHour() == null) botUser.setBreakfastHour(7);
+            if (botUser.getDinnerHour() == null) botUser.setDinnerHour(15);
+            if (botUser.getIsAdmin() == null) botUser.setIsAdmin(false);
         }
         botUserRepository.save(botUser);
     }

@@ -30,4 +30,7 @@ public interface MealRepository extends JpaRepository<Meal, Long> {
     List<Meal> searchMealsByKeyword(Integer cityId, LocalDate startDate, String keyword);
     void deleteByDate(LocalDate date);
     void deleteByDateAndCityId(LocalDate date, Integer cityId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COUNT(DISTINCT m.cityId) FROM Meal m WHERE m.date = :date")
+    long countDistinctCitiesWithMealsOnDate(LocalDate date);
 }

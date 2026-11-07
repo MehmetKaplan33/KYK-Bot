@@ -1,5 +1,6 @@
 package com.kyk.mealtracker.bot;
 
+import com.kyk.mealtracker.entity.BotUser;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
@@ -55,6 +56,59 @@ public final class AdminKeyboardHelper {
         btnBroadcastImg.setCallbackData("admin_action:bc_prompt_img");
         r3.add(btnBroadcastImg);
         rows.add(r3);
+
+        // Satır 4: Admin Yönetimi (Ekle / Çıkar / Listele)
+        List<InlineKeyboardButton> r4 = new ArrayList<>();
+        InlineKeyboardButton btnManageAdmins = new InlineKeyboardButton();
+        btnManageAdmins.setText("👑 Admin Yönetimi (Ekle / Çıkar)");
+        btnManageAdmins.setCallbackData("admin_action:manage_admins");
+        r4.add(btnManageAdmins);
+        rows.add(r4);
+
+        markup.setKeyboard(rows);
+        return markup;
+    }
+
+    /**
+     * Admin Ekleme ve Çıkarma Yönetim Klavyesi
+     */
+    public static InlineKeyboardMarkup getAdminManagementKeyboard(List<BotUser> admins, Long requesterChatId) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        // Mevcut diğer adminleri tek tıkla çıkarma butonları (Kendi yetkisini silmeyi engeller)
+        if (admins != null) {
+            for (BotUser admin : admins) {
+                if (admin.getChatId().equals(requesterChatId)) continue;
+                String displayName = (admin.getFirstName() != null ? admin.getFirstName() : "Admin");
+                if (admin.getUsername() != null && !admin.getUsername().isBlank()) {
+                    displayName += " (@" + admin.getUsername() + ")";
+                }
+
+                List<InlineKeyboardButton> removeRow = new ArrayList<>();
+                InlineKeyboardButton btnRemove = new InlineKeyboardButton();
+                btnRemove.setText("❌ Yetkiyi Al: " + displayName);
+                btnRemove.setCallbackData("admin_action:remove_admin:" + admin.getChatId());
+                removeRow.add(btnRemove);
+                rows.add(removeRow);
+            }
+        }
+
+        // Yeni Admin Ekle Butonu
+        List<InlineKeyboardButton> addRow = new ArrayList<>();
+        InlineKeyboardButton btnAdd = new InlineKeyboardButton();
+        btnAdd.setText("➕ Yeni Admin Ekle (ID veya @kullanıcı)");
+        btnAdd.setCallbackData("admin_action:prompt_add_admin");
+        addRow.add(btnAdd);
+        rows.add(addRow);
+
+        // Geri Dön
+        List<InlineKeyboardButton> backRow = new ArrayList<>();
+        InlineKeyboardButton btnBack = new InlineKeyboardButton();
+        btnBack.setText("🔙 Yönetici Paneline Dön");
+        btnBack.setCallbackData("admin_action:dashboard");
+        backRow.add(btnBack);
+        rows.add(backRow);
 
         markup.setKeyboard(rows);
         return markup;

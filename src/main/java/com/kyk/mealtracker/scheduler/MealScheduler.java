@@ -33,6 +33,41 @@ public class MealScheduler {
     private final BotUserRepository botUserRepository;
     private final MealSyncService mealSyncService;
 
+    /**
+     * Uygulama (Coolify/Prod) ayağa kalktığında:
+     * 1. Eski sürümden kalan kullanıcıların yeni sütunlarını (breakfast_hour=7, dinner_hour=15, city_id=1) güvenle doldurur.
+     * 2. Aktif şehirlerin menülerini arka planda senkronize eder.
+     */
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void onStartup() {
+        try {
+            List<BotUser> allUsers = botUserRepository.findAll();
+            List<BotUser> toUpdate = new java.util.ArrayList<>();
+            for (BotUser u : allUsers) {
+                boolean changed = false;
+                if (u.getCityId() == null) { u.setCityId(1); changed = true; }
+                if (u.getBreakfastHour() == null) { u.setBreakfastHour(7); changed = true; }
+                if (u.getDinnerHour() == null) { u.setDinnerHour(15); changed = true; }
+                if (u.getIsAdmin() == null) { u.setIsAdmin(false); changed = true; }
+                if (changed) toUpdate.add(u);
+            }
+            if (!toUpdate.isEmpty()) {
+                botUserRepository.saveAll(toUpdate);
+                logger.info("Eski sürümden {} kullanıcının varsayılan bildirim saatleri ve şehir bilgileri güncellendi.", toUpdate.size());
+            }
+        } catch (Exception e) {
+            logger.warn("Kullanıcı varsayılan değer taşıma uyarısı: {}", e.getMessage());
+        }
+
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                mealSyncService.fetchMealsForAllActiveCities();
+            } catch (Exception e) {
+                logger.warn("Başlangıç menü senkronizasyonu hatası: {}", e.getMessage());
+            }
+        });
+    }
+
     // Ayın 1'inde gece 03:00'te tüm aktif şehirlerin aylık menülerini çek
     @Scheduled(cron = "0 0 3 1 * ?", zone = "Europe/Istanbul")
     public void fetchMonthlyMeals() {

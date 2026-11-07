@@ -15,5 +15,13 @@ public interface MealRatingRepository extends JpaRepository<MealRating, Long> {
 
     @Query("SELECT AVG(r.score) FROM MealRating r WHERE r.date = :date AND r.mealType = :mealType AND r.cityId = :cityId")
     Double getAverageScore(LocalDate date, Integer mealType, Integer cityId);
+
+    long countByDate(LocalDate date);
+
+    @Query("SELECT AVG(r.score) FROM MealRating r WHERE r.date = :date")
+    Double getOverallAverageScoreByDate(LocalDate date);
+
+    @Query("SELECT AVG(r.score) FROM MealRating r")
+    Double getOverallAverageScoreAllTime();
 }
 
