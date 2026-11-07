@@ -803,20 +803,26 @@ public class KykMealBot extends TelegramLongPollingBot {
         BotUser user = botUserRepository.findById(chatId).orElse(null);
         int cityPlate = (user != null && user.getCityId() != null) ? user.getCityId() : 1;
         String cityName = CityHelper.getCityName(cityPlate);
+        int bfHour = (user != null && user.getBreakfastHour() != null) ? user.getBreakfastHour() : 7;
+        int dnHour = (user != null && user.getDinnerHour() != null) ? user.getDinnerHour() : 15;
+
+        String notifStatus = (user != null && user.isNotificationsEnabled())
+                ? String.format("Açık ✅ (%02d:00 & %02d:00)", bfHour, dnHour)
+                : "Kapalı ❌";
 
         String text = String.format("""
                 👋 *KYK Yemek Takip Botu 2.0'a Hoş Geldiniz!*
 
-                Devlet yurtlarındaki günlük kahvaltı ve akşam yemeği menülerini, kalori detaylarını ve servis saatlerini bu bot üzerinden takip edebilirsiniz.
+                81 ildeki devlet yurtlarının günlük kahvaltı ve akşam yemeği menülerini, kalori detaylarını ve öğrenci puanlarını bu bot üzerinden takip edebilirsiniz.
 
-                📍 *Seçili Şehriniz:* %d - %s
+                📍 *Seçili Şehriniz:* %02d - %s
                 🔔 *Bildirimler:* %s
 
-                Aşağıdaki butonları kullanarak menülere anında ulaşabilirsiniz! ⬇️
+                💡 _Şehrinizi veya bildirim saatlerinizi değiştirmek için_ `⚙️ Şehir / Ayarlar` _butonunu kullanabilirsiniz._ ⬇️
                 """,
                 cityPlate,
                 cityName,
-                (user != null && user.isNotificationsEnabled()) ? "Açık ✅ (06:30 & 14:00)" : "Kapalı ❌"
+                notifStatus
         );
 
         SendMessage sm = SendMessage.builder()
@@ -967,21 +973,29 @@ public class KykMealBot extends TelegramLongPollingBot {
 
     private void sendHelp(Long chatId, boolean isAdmin) throws TelegramApiException {
         String help = """
-                ℹ️ *KYK Yemek Takip Botu - Komut Rehberi*
+                ℹ️ *KYK Yemek Takip Botu 2.0 — Kullanım Rehberi*
 
-                🍽️ *Menü Butonları:*
-                • `🍽️ Bugünün Menüsü` : Bugünün kahvaltı ve akşam menüsü
+                🍽️ *Menü & Keşif Butonları:*
+                • `🍽️ Bugünün Menüsü` : Bugünün kahvaltı ve akşam menüsü (◀️ ▶️ ile 30 gün gezinme)
                 • `🌅 Yarının Menüsü` : Yarının menüsü
-                • `📅 Haftalık Menü` : 7 günlük takvimden gün seçimi
-                • `⚙️ Şehir / Ayarlar` : Şehir değiştirme ve bildirim ayarları
+                • `📅 Haftalık Menü` : 7 günlük hızlı takvim seçimi
+                • `🔍 Yemek Ara` : Sohbete yemek adı yazarak (örn: `pizza`, `köfte`) bu ay hangi gün çıkacağını bulma
+                • `🎲 Ne Yesem?` : Yurt yemekhanesi dışında öğrenci dostu yemek önerisi çarkı
+                • `⚙️ Şehir / Ayarlar` : 81 il seçimi ve kişisel bildirim saati ayarları
 
-                💬 *Diğer Komutlar:*
-                • `/sehir_sec [plaka]` : Şehrinizi doğrudan plaka koduyla ayarlayın
-                • `/iletisim [mesaj]` : Bot geliştiricilerine geri bildirim iletin
-                • `/start` : Botu yeniden başlatır ve ana menüyü getirir
+                💬 *Kısayol Komutları:*
+                • `/sehir_sec [plaka]` : Şehrinizi doğrudan plaka koduyla ayarlayın (Örn: `/sehir_sec 06`)
+                • `/iletisim [mesaj]` : Bot geliştiricilerine öneri veya hata bildirin
+                • `/start` : Ana menüyü ve klavyeyi yeniler
                 """;
         if (isAdmin) {
-            help += "\n🔧 *Yönetici Paneli:* Menüdeki `🔧 Yönetici Paneli` butonuna basabilir veya `/admin` yazabilirsiniz.";
+            help += """
+
+                    🔧 *Yönetici Kısayolları:*
+                    • `🔧 Yönetici Paneli` veya `/admin` : İstatistikler, duyuru, il senkronizasyonu ve admin yönetimi
+                    • `/admin_ekle [@kullanıcı veya ID]` : Hızlı admin ekleme
+                    • `/admin_cikar [ID]` : Admin yetkisi kaldırma
+                    """;
         }
         sendPlainMessage(chatId, help);
     }
